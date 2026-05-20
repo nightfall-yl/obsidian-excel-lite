@@ -18,6 +18,20 @@ const zhCN: Record<string, string> = {
   RENDER_MODE_DESKTOP: '桌面编辑模式',
   RENDER_MODE_MOBILE: '移动预览模式',
   PREVIEW_BADGE: '👁 预览模式',
+  SETTINGS_FILE_TITLE: '文件设置',
+  SETTINGS_EMBED_TITLE: '嵌入链接设置',
+  SETTING_FOLDER: '文件目录',
+  SETTING_FOLDER_DESC: '新建文件将放在此目录下',
+  SETTING_FILENAME_PREFIX: '文件名前缀',
+  SETTING_FILENAME_PREFIX_DESC: '设置文件名前缀',
+  SETTING_FILE_TIME_FORMAT: '文件时间格式',
+  SETTING_FILE_TIME_FORMAT_DESC: '使用 moment.js 格式，如 YYYY-MM-DD HH.mm.ss、YYYYMMDD_HHmmss 等，留空则不加时间戳',
+  SETTING_EMBED_HEIGHT: '表格高度',
+  SETTING_EMBED_HEIGHT_DESC: '设置嵌入表格的默认渲染高度（px）。可在嵌入链接中用 <N> 单独指定，如 ![[file|A1:C7<500>]]',
+  SETTING_SHOW_JUMP_ORIGINAL: '显示文件名标签',
+  SETTING_SHOW_JUMP_ORIGINAL_DESC: '是否在嵌入表格顶部显示可点击的文件名标签，点击后跳转打开原文',
+  SETTING_SHOW_EMBED_BOTTOM: '显示表格底部内容',
+  SETTING_SHOW_EMBED_BOTTOM_DESC: '启用该选项后，嵌入的表格链接会自动显示表格底部内容',
 };
 
 export default zhCN;

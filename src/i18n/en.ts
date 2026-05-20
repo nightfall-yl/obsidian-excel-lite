@@ -18,6 +18,20 @@ const en: Record<string, string> = {
   RENDER_MODE_DESKTOP: 'Desktop edit mode',
   RENDER_MODE_MOBILE: 'Mobile preview mode',
   PREVIEW_BADGE: '👁 Preview only',
+  SETTINGS_FILE_TITLE: 'File Settings',
+  SETTINGS_EMBED_TITLE: 'Embed Link Settings',
+  SETTING_FOLDER: 'File Directory',
+  SETTING_FOLDER_DESC: 'New files will be created in this directory',
+  SETTING_FILENAME_PREFIX: 'Filename Prefix',
+  SETTING_FILENAME_PREFIX_DESC: 'Set the filename prefix',
+  SETTING_FILE_TIME_FORMAT: 'File Time Format',
+  SETTING_FILE_TIME_FORMAT_DESC: 'Uses moment.js format, e.g. YYYY-MM-DD HH.mm.ss, YYYYMMDD_HHmmss, etc. Leave empty to omit timestamp',
+  SETTING_EMBED_HEIGHT: 'Table Height',
+  SETTING_EMBED_HEIGHT_DESC: 'Default render height (px) for embedded tables. Override per-embed with <N>, e.g. ![[file|A1:C7<500>]]',
+  SETTING_SHOW_JUMP_ORIGINAL: 'Show File Label',
+  SETTING_SHOW_JUMP_ORIGINAL_DESC: 'Whether to show a clickable file name label above the embedded table that opens the original file',
+  SETTING_SHOW_EMBED_BOTTOM: 'Show Table Bottom Content',
+  SETTING_SHOW_EMBED_BOTTOM_DESC: 'When enabled, embedded table links will automatically display bottom content of the table',
 };
 
 export default en;

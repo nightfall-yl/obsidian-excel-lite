@@ -15,7 +15,7 @@
     "spreadsheet",
     "xlsx"
   ],
-  "author": "nightfall_yl",
+  "author": "nightfall",
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^20.17.9",

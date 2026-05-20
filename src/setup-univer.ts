@@ -159,6 +159,13 @@ export function createUniverInstance(
   darkMode: boolean = false,
   app?: App,
   mobilePreviewMode: boolean = false,
+  options?: {
+    header?: boolean;
+    footer?: boolean;
+    toolbar?: boolean;
+    contextMenu?: boolean;
+    embedMode?: boolean;
+  },
 ) {
   const obsidianLocale = getObsidianLocale();
   const isMobile = !Platform.isDesktopApp;
@@ -186,12 +193,12 @@ export function createUniverInstance(
 
   if (isMobile) {
     if (mobilePreviewMode) {
-      registerMobilePreviewPlugins(univer, container);
+      registerMobilePreviewPlugins(univer, container, options);
     } else {
-      registerMobileEditPlugins(univer, container);
+      registerMobileEditPlugins(univer, container, options);
     }
   } else {
-    registerDesktopPlugins(univer, container, app);
+    registerDesktopPlugins(univer, container, app, options);
   }
 
   const univerAPI = FUniver.newAPI(univer);
@@ -234,15 +241,20 @@ export function createUniverInstance(
   return { univerAPI, univer };
 }
 
-function registerDesktopPlugins(univer: Univer, container: string | HTMLElement, app?: App) {
+function registerDesktopPlugins(univer: Univer, container: string | HTMLElement, app?: App, options?: {
+  header?: boolean;
+  footer?: boolean;
+  toolbar?: boolean;
+  contextMenu?: boolean;
+}) {
   univer.registerPlugin(UniverDocsPlugin);
   univer.registerPlugin(UniverRenderEnginePlugin);
   univer.registerPlugin(UniverUIPlugin, {
     container,
-    header: true,
-    footer: true,
-    toolbar: true,
-    contextMenu: true,
+    header: options?.header ?? true,
+    footer: options?.footer ?? true,
+    toolbar: options?.toolbar ?? true,
+    contextMenu: options?.contextMenu ?? true,
   });
   univer.registerPlugin(UniverDocsUIPlugin);
   univer.registerPlugin(UniverSheetsPlugin);
@@ -279,15 +291,20 @@ function registerDesktopPlugins(univer: Univer, container: string | HTMLElement,
   univer.registerPlugin(UniverSheetsNoteUIPlugin);
 }
 
-function registerMobilePreviewPlugins(univer: Univer, container: string | HTMLElement) {
+function registerMobilePreviewPlugins(univer: Univer, container: string | HTMLElement, options?: {
+  header?: boolean;
+  footer?: boolean;
+  toolbar?: boolean;
+  contextMenu?: boolean;
+}) {
   univer.registerPlugin(UniverDocsPlugin);
   univer.registerPlugin(UniverRenderEnginePlugin);
   univer.registerPlugin(UniverMobileUIPlugin, {
     container,
-    contextMenu: false,
-    header: false,
-    footer: true,
-    toolbar: false,
+    contextMenu: options?.contextMenu ?? false,
+    header: options?.header ?? false,
+    footer: options?.footer ?? true,
+    toolbar: options?.toolbar ?? false,
   });
   univer.registerPlugin(UniverDocsUIPlugin);
   univer.registerPlugin(UniverSheetsPlugin);
@@ -300,15 +317,20 @@ function registerMobilePreviewPlugins(univer: Univer, container: string | HTMLEl
   });
 }
 
-function registerMobileEditPlugins(univer: Univer, container: string | HTMLElement) {
+function registerMobileEditPlugins(univer: Univer, container: string | HTMLElement, options?: {
+  header?: boolean;
+  footer?: boolean;
+  toolbar?: boolean;
+  contextMenu?: boolean;
+}) {
   univer.registerPlugin(UniverDocsPlugin);
   univer.registerPlugin(UniverRenderEnginePlugin);
   univer.registerPlugin(UniverMobileUIPlugin, {
     container,
-    contextMenu: true,
-    header: true,
-    footer: true,
-    toolbar: true,
+    contextMenu: options?.contextMenu ?? true,
+    header: options?.header ?? true,
+    footer: options?.footer ?? true,
+    toolbar: options?.toolbar ?? true,
     disableAutoFocus: false,
   });
   univer.registerPlugin(UniverDocsUIPlugin);

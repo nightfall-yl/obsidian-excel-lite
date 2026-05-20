@@ -93,7 +93,7 @@ export class SheetView extends TextFileView {
 
       await super.save();
     } catch (e) {
-      console.error('SheetFree save error:', e);
+      console.error('Excel save error:', e);
     } finally {
       this.isSaving = false;
     }
@@ -115,15 +115,15 @@ export class SheetView extends TextFileView {
       this.isMobilePreviewMode = mobilePreviewMode;
     }
 
-    this.sheetContainerEl = this.contentEl.createDiv({ cls: 'sheet-free-container' });
+    this.sheetContainerEl = this.contentEl.createDiv({ cls: 'excel-container' });
     this.sheetContainerEl.style.width = '100%';
     this.sheetContainerEl.style.height = '100%';
 
     if (isMobile) {
       if (this.isMobilePreviewMode) {
-        this.sheetContainerEl.addClass('sheet-free-mobile-preview');
+        this.sheetContainerEl.addClass('excel-mobile-preview');
       } else {
-        this.sheetContainerEl.addClass('sheet-free-mobile-edit');
+        this.sheetContainerEl.addClass('excel-mobile-edit');
       }
     }
 
@@ -221,7 +221,7 @@ export class SheetView extends TextFileView {
         (data: IWorkbookData) => this.handleImportData(data),
       );
     } catch (e) {
-      console.error('SheetFree: failed to setup import/export:', e);
+      console.error('Excel: failed to setup import/export:', e);
     }
   }
 

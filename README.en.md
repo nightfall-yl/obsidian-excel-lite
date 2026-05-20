@@ -2,7 +2,7 @@
 
 > Free Excel-like spreadsheet plugin for Obsidian, powered by [Univer](https://github.com/dream-num/univer).
 
-[![Version](https://img.shields.io/badge/version-26.5.4-blue)](https://github.com/nightfall_yl/obsidian-excel)
+[![Version](https://img.shields.io/badge/version-26.5.4-blue)](https://github.com/nightfall/obsidian-excel)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Obsidian](https://img.shields.io/badge/Obsidian-0.15.0%2B-purple)](https://obsidian.md)
 [**中文**](README.md) | English

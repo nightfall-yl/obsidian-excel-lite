@@ -1,50 +1,66 @@
-import type { Plugin, TFile } from 'obsidian';
+import type { IWorkbookData } from '@univerjs/core';
+import { LifecycleStages } from '@univerjs/core';
+import type { Plugin } from 'obsidian';
+import { Platform, TFile } from 'obsidian';
 import { parseSheetFile } from './data-utils';
+import { SHEET_FRONTMATTER_KEYS } from './constants';
+import { createUniverInstance } from './setup-univer';
 
 interface EmbedLinkParseResult {
   filePath: string;
+  fileName: string;
   sheetName: string;
   startCell: string;
   endCell: string;
+  height?: number;
   displayType: string;
 }
 
-function parseEmbedLinkSyntax(syntax: string): EmbedLinkParseResult {
-  const parts = syntax.split('|');
+function parseEmbedLinkSyntax(input: string): EmbedLinkParseResult {
+  const parts = input.split('|');
   const pathPart = parts[0] || '';
   const altPart = parts.slice(1).join('|');
 
-  const hashIndex = pathPart.indexOf('#');
-  const filePath = hashIndex >= 0 ? pathPart.slice(0, hashIndex) : pathPart;
-  const afterHash = hashIndex >= 0 ? pathPart.slice(hashIndex + 1) : '';
+  const lastSlashIdx = pathPart.lastIndexOf('/');
+  const filePath = lastSlashIdx >= 0 ? pathPart.slice(0, lastSlashIdx) : '';
+  const fileNameAndRest = lastSlashIdx >= 0 ? pathPart.slice(lastSlashIdx + 1) : pathPart;
+
+  const hashIndex = fileNameAndRest.indexOf('#');
+  const fileName = hashIndex >= 0 ? fileNameAndRest.slice(0, hashIndex) : fileNameAndRest;
+  const afterHash = hashIndex >= 0 ? fileNameAndRest.slice(hashIndex + 1) : '';
 
   let sheetName = '';
-  let rangeStr = '';
+  let startCell = '';
+  let endCell = '';
 
-  const colonIndex = afterHash.indexOf(':');
   if (afterHash.includes('|')) {
     const pipeIdx = afterHash.indexOf('|');
     sheetName = afterHash.slice(0, pipeIdx);
-    rangeStr = afterHash.slice(pipeIdx + 1);
-  } else if (colonIndex >= 0 && /^[A-Z]/.test(afterHash)) {
-    const match = afterHash.match(/^([A-Z]+\d+):([A-Z]+\d+)$/);
-    if (match) {
-      rangeStr = afterHash;
+    const rangePart = afterHash.slice(pipeIdx + 1);
+    if (rangePart.match(/^([A-Z]+\d+):([A-Z]+\d+)$/)) {
+      startCell = rangePart.split(':')[0];
+      endCell = rangePart.split(':')[1];
+    }
+  } else if (afterHash) {
+    if (afterHash.match(/^([A-Z]+\d+):([A-Z]+\d+)$/)) {
+      startCell = afterHash.split(':')[0];
+      endCell = afterHash.split(':')[1];
     } else {
       sheetName = afterHash;
     }
-  } else {
-    sheetName = afterHash;
   }
 
-  let startCell = '';
-  let endCell = '';
-  if (rangeStr.includes(':')) {
-    const [s, e] = rangeStr.split(':');
-    startCell = s || '';
-    endCell = e || '';
-  } else if (rangeStr) {
-    startCell = rangeStr;
+  const altRangeMatch = altPart.match(/([A-Z]+\d+):([A-Z]+\d+)/i);
+  if (altRangeMatch && !startCell) {
+    startCell = altRangeMatch[1].toUpperCase();
+    endCell = altRangeMatch[2].toUpperCase();
+  }
+
+  let height: number | undefined;
+  const heightMatch = altPart.match(/<(\d+)>/);
+
+  if (heightMatch) {
+    height = parseInt(heightMatch[1], 10);
   }
 
   let displayType = 'table';
@@ -54,7 +70,7 @@ function parseEmbedLinkSyntax(syntax: string): EmbedLinkParseResult {
     displayType = 'image';
   }
 
-  return { filePath, sheetName, startCell, endCell, displayType };
+  return { filePath, fileName, sheetName, startCell, endCell, height, displayType };
 }
 
 function cellRefToIndex(ref: string): { row: number; col: number } | null {
@@ -85,7 +101,7 @@ function renderCellDataAsTable(
   endCol: number,
 ): HTMLTableElement {
   const table = document.createElement('table');
-  table.className = 'sheet-free-embed-table';
+  table.className = 'excel-embed-table';
 
   for (let r = startRow; r <= endRow; r++) {
     const tr = document.createElement('tr');
@@ -102,79 +118,318 @@ function renderCellDataAsTable(
   return table;
 }
 
-export function registerEmbedLinkProcessor(plugin: Plugin): void {
+function cloneWorkbookData(workbookData: IWorkbookData): IWorkbookData {
+  return JSON.parse(JSON.stringify(workbookData)) as IWorkbookData;
+}
+
+function getRangeWorkbookData(
+  workbookData: IWorkbookData,
+  sheetName: string,
+  startCell: string,
+  endCell: string,
+): IWorkbookData {
+  const data = cloneWorkbookData(workbookData);
+  const sheet = findSheet(data, sheetName);
+  if (!sheet) return data;
+
+  const startIdx = cellRefToIndex(startCell);
+  const endIdx = cellRefToIndex(endCell);
+  if (!startIdx || !endIdx) return data;
+
+  const startRow = Math.min(startIdx.row, endIdx.row);
+  const endRow = Math.max(startIdx.row, endIdx.row);
+  const startCol = Math.min(startIdx.col, endIdx.col);
+  const endCol = Math.max(startIdx.col, endIdx.col);
+
+  sheet.rowCount = endRow + 1;
+  sheet.columnCount = endCol + 1;
+
+  const rowData = sheet.rowData || {};
+  for (let row = 0; row < startRow; row++) {
+    rowData[row] = {
+      ...(rowData[row] || {}),
+      hd: 1,
+      h: rowData[row]?.h || sheet.defaultRowHeight || 25,
+    };
+  }
+  sheet.rowData = rowData;
+
+  const columnData = sheet.columnData || {};
+  for (let col = 0; col < startCol; col++) {
+    columnData[col] = {
+      ...(columnData[col] || {}),
+      hd: 1,
+      w: columnData[col]?.w || sheet.defaultColumnWidth || 100,
+    };
+  }
+  sheet.columnData = columnData;
+
+  const sheetId = sheet.id;
+  if (sheetId) {
+    data.sheets = { [sheetId]: sheet };
+    data.sheetOrder = [sheetId];
+  }
+
+  return data;
+}
+
+function createUniverEmbedElement(
+  workbookData: IWorkbookData,
+  height: number,
+  showFooter: boolean,
+  plugin: any,
+): HTMLDivElement {
+  const embedEl = document.createElement('div');
+  embedEl.className = 'excel-embed-univer';
+  embedEl.style.height = `${height}px`;
+  embedEl.style.width = '100%';
+
+  const observer = new MutationObserver(() => {
+    if (!document.body.contains(embedEl)) return;
+
+    observer.disconnect();
+
+    const isDark = plugin.app.isDarkMode?.() ?? document.body.hasClass?.('theme-dark') ?? false;
+    const { univerAPI } = createUniverInstance(embedEl, isDark, plugin.app, !Platform.isDesktopApp, {
+      header: false,
+      footer: showFooter,
+      toolbar: false,
+      contextMenu: false,
+      embedMode: true,
+    });
+
+    const workbook = univerAPI.createWorkbook(workbookData);
+    univerAPI.addEvent(univerAPI.Event.LifeCycleChanged, async (event: any) => {
+      if (event.stage !== LifecycleStages.Rendered) return;
+
+      try {
+        const permission = workbook?.getWorkbookPermission?.();
+        await permission?.setReadOnly?.();
+        univerAPI.setPermissionDialogVisible?.(false);
+      } catch {
+        // Readonly APIs vary a little across Univer facade versions.
+      }
+    });
+  });
+
+  observer.observe(document.body, { childList: true, subtree: true });
+  return embedEl;
+}
+
+export function registerEmbedLinkProcessor(plugin: any): void {
   plugin.registerMarkdownCodeBlockProcessor('sheet-embed', async (source, el) => {
-    el.createEl('p', { text: 'Sheet embed block', cls: 'sheet-free-embed-placeholder' });
+    el.createEl('p', { text: 'Sheet embed block', cls: 'excel-embed-placeholder' });
   });
 
   const processor = async (el: HTMLElement, ctx: any) => {
     const internalEmbeds = el.querySelectorAll('.internal-embed');
 
-    for (const embedEl of Array.from(internalEmbeds)) {
-      const src = embedEl.getAttribute('src') || '';
-      const alt = embedEl.getAttribute('alt') || '';
-
-      if (!isSheetEmbed(src, alt, plugin)) continue;
-
-      const targetFile = resolveSheetFile(src, plugin);
-      if (!targetFile) continue;
-
-      try {
-        const content = await plugin.app.vault.read(targetFile);
-        const workbookData = parseSheetFile(content, targetFile.path);
-        if (!workbookData) continue;
-
-        const parseResult = parseEmbedLinkSyntax(`${src}|${alt}`);
-        const sheetData = findSheet(workbookData, parseResult.sheetName);
-        if (!sheetData?.cellData) continue;
-
-        const container = document.createElement('div');
-        container.className = 'sheet-free-embed-container';
-
-        const fileLabel = container.createDiv({ cls: 'sheet-free-embed-file-label' });
-        fileLabel.textContent = targetFile.basename;
-        fileLabel.addEventListener('click', () => {
-          plugin.app.workspace.openLinkText(targetFile.path, '', 'split');
-        });
-
-        let startRow = 0;
-        let startCol = 0;
-        let endRow = Math.min(9, (sheetData.rowCount || 100) - 1);
-        let endCol = Math.min(5, (sheetData.columnCount || 26) - 1);
-
-        if (parseResult.startCell) {
-          const startIdx = cellRefToIndex(parseResult.startCell);
-          if (startIdx) {
-            startRow = startIdx.row;
-            startCol = startIdx.col;
-          }
-        }
-        if (parseResult.endCell) {
-          const endIdx = cellRefToIndex(parseResult.endCell);
-          if (endIdx) {
-            endRow = endIdx.row;
-            endCol = endIdx.col;
-          }
-        }
-
-        const table = renderCellDataAsTable(sheetData.cellData, startRow, startCol, endRow, endCol);
-        container.appendChild(table);
-
-        embedEl.replaceWith(container);
-      } catch (e) {
-        console.error('SheetFree: embed link render error:', e);
-      }
+    if (internalEmbeds.length === 0) {
+      await processEditMode(el, ctx, plugin);
+      return;
     }
+
+    await processReadingMode(internalEmbeds, plugin);
   };
 
   plugin.registerMarkdownPostProcessor(processor);
 }
 
-function isSheetEmbed(src: string, alt: string, plugin: Plugin): boolean {
+async function processEditMode(el: HTMLElement, ctx: any, plugin: any): Promise<void> {
+  const file = plugin.app.vault.getAbstractFileByPath(ctx.sourcePath);
+  if (!(file instanceof TFile)) return;
+  if (!plugin.isSheetFile(file)) return;
+
+  // @ts-expect-error
+  if (ctx.remainingNestLevel < 4) return;
+
+  // @ts-expect-error
+  const containerEl = ctx.containerEl;
+  let embedDiv: HTMLElement = containerEl;
+
+  while (
+    !embedDiv.hasClass('dataview')
+    && !embedDiv.hasClass('cm-preview-code-block')
+    && !embedDiv.hasClass('cm-embed-block')
+    && !embedDiv.hasClass('internal-embed')
+    && !embedDiv.hasClass('markdown-reading-view')
+    && !embedDiv.hasClass('markdown-embed')
+    && embedDiv.parentElement
+  ) {
+    embedDiv = embedDiv.parentElement;
+  }
+
+  if (
+    embedDiv.hasClass('dataview')
+    || embedDiv.hasClass('cm-preview-code-block')
+    || embedDiv.hasClass('cm-embed-block')
+  ) {
+    return;
+  }
+
+  const isMarkdownEmbed = embedDiv.hasClass('markdown-embed');
+  const isReadingView = embedDiv.hasClass('markdown-reading-view');
+
+  if (
+    !embedDiv.hasClass('internal-embed')
+    && (isMarkdownEmbed || isReadingView)
+  ) {
+    const isFrontmatter = Boolean(el.querySelector('.frontmatter'));
+    if (ctx.frontmatter) {
+      el.empty();
+    }
+
+    if (!isFrontmatter) {
+      if (el.parentElement === containerEl) {
+        containerEl.removeChild(el);
+      }
+    }
+
+    embedDiv.empty();
+
+    const data = await plugin.app.vault.read(file);
+    const src = embedDiv.getAttribute('src') ?? file.path.slice(0, -(file.extension.length + 1));
+    const alt = embedDiv.getAttribute('alt') ?? '';
+    const sheetDiv = await createEmbedLinkDiv(src, alt, file, data, plugin);
+    embedDiv.appendChild(sheetDiv);
+
+    if (isMarkdownEmbed) {
+      embedDiv.removeClass('markdown-embed');
+      embedDiv.removeClass('inline-embed');
+    }
+    return;
+  }
+
+  el.empty();
+
+  if (embedDiv.hasAttribute('excel-ready')) return;
+  embedDiv.setAttribute('excel-ready', '');
+
+  embedDiv.empty();
+
+  const data = await plugin.app.vault.read(file);
+  const src = embedDiv.getAttribute('src') ?? file.path.slice(0, -(file.extension.length + 1));
+  const alt = embedDiv.getAttribute('alt') ?? '';
+
+  const sheetDiv = await createEmbedLinkDiv(src, alt, file, data, plugin);
+  embedDiv.appendChild(sheetDiv);
+
+  if (isMarkdownEmbed) {
+    embedDiv.removeClass('markdown-embed');
+    embedDiv.removeClass('inline-embed');
+  }
+}
+
+async function processReadingMode(internalEmbeds: NodeListOf<Element>, plugin: any): Promise<void> {
+  for (const embedEl of Array.from(internalEmbeds)) {
+    const src = embedEl.getAttribute('src') || '';
+    const alt = embedEl.getAttribute('alt') || '';
+
+    if ((embedEl as HTMLElement).hasClass?.('excel-embed-file-label')) continue;
+    if (!isSheetEmbed(src, alt, plugin)) continue;
+
+    const targetFile = resolveSheetFile(src, plugin);
+    if (!targetFile) continue;
+
+    try {
+      const data = await plugin.app.vault.read(targetFile);
+      const sheetDiv = await createEmbedLinkDiv(src, alt, targetFile, data, plugin);
+      embedEl.replaceWith(sheetDiv);
+    } catch (e) {
+      console.error('Excel: embed link render error:', e);
+    }
+  }
+}
+
+async function createEmbedLinkDiv(
+  src: string,
+  alt: string,
+  file: TFile,
+  data: string,
+  plugin: any,
+): Promise<HTMLDivElement> {
+  const workbookData = parseSheetFile(data, file.path);
+  if (!workbookData) {
+    const div = document.createElement('div');
+    div.textContent = 'No Data';
+    return div;
+  }
+
+  const parseResult = parseEmbedLinkSyntax(`${src}|${alt}`);
+  const sheetData = findSheet(workbookData, parseResult.sheetName);
+  if (!sheetData?.cellData) {
+    const div = document.createElement('div');
+    div.textContent = 'No Sheet Data';
+    return div;
+  }
+
+  const container = document.createElement('div');
+  container.className = 'excel-embed-container';
+
+  const effectiveHeight = parseResult.height ?? plugin.settings.embedTableHeight;
+
+  if (plugin.settings.showJumpToOriginal) {
+    const fileLabel = container.createDiv({
+      cls: 'excel-embed-file-label internal-embed file-embed mod-generic is-loaded',
+      attr: {
+        src: file.path,
+        alt: file.basename,
+      },
+    });
+    fileLabel.textContent = file.basename;
+    fileLabel.addEventListener('click', (event) => {
+      event.stopPropagation();
+      plugin.app.workspace.openLinkText(file.path, '', 'split');
+    });
+  }
+
+  let startRow = 0;
+  let startCol = 0;
+  let endRow = Math.min(9, (sheetData.rowCount || 100) - 1);
+  let endCol = Math.min(5, (sheetData.columnCount || 26) - 1);
+
+  if (parseResult.startCell) {
+    const startIdx = cellRefToIndex(parseResult.startCell);
+    if (startIdx) {
+      startRow = startIdx.row;
+      startCol = startIdx.col;
+    }
+  }
+  if (parseResult.endCell) {
+    const endIdx = cellRefToIndex(parseResult.endCell);
+    if (endIdx) {
+      endRow = endIdx.row;
+      endCol = endIdx.col;
+    }
+  }
+
+  if (parseResult.displayType === 'html') {
+    container.style.maxHeight = `${effectiveHeight}px`;
+    container.style.overflowY = 'auto';
+    const table = renderCellDataAsTable(sheetData.cellData, startRow, startCol, endRow, endCol);
+    container.appendChild(table);
+    return container;
+  }
+
+  const embedWorkbookData = parseResult.startCell && parseResult.endCell
+    ? getRangeWorkbookData(workbookData, parseResult.sheetName, parseResult.startCell, parseResult.endCell)
+    : cloneWorkbookData(workbookData);
+  const univerEl = createUniverEmbedElement(
+    embedWorkbookData,
+    effectiveHeight,
+    plugin.settings.showEmbedBottomContent,
+    plugin,
+  );
+  container.appendChild(univerEl);
+
+  return container;
+}
+
+function isSheetEmbed(src: string, _alt: string, plugin: Plugin): boolean {
   const filePath = src.split('#')[0];
   if (!filePath) return false;
 
-  if (filePath.endsWith('.sheet.md') || filePath.endsWith('.sheet')) return true;
+  if (filePath.endsWith('.sheet.md') || filePath.endsWith('.sheet') || filePath.endsWith('.univer.md')) return true;
 
   const file = resolveSheetFile(src, plugin);
   return !!file;
@@ -191,10 +446,14 @@ function resolveSheetFile(src: string, plugin: Plugin): TFile | null {
   const mdFile = plugin.app.vault.getAbstractFileByPath(mdPath);
   if (mdFile instanceof TFile) {
     const cache = plugin.app.metadataCache.getFileCache(mdFile);
-    if (cache?.frontmatter && cache.frontmatter['obsidian-excel']) {
+    if (cache?.frontmatter && SHEET_FRONTMATTER_KEYS.some(key => cache.frontmatter![key])) {
       return mdFile;
     }
   }
+
+  const univerMdPath = filePath.endsWith('.univer.md') ? filePath : `${filePath}.univer.md`;
+  const univerMdFile = plugin.app.vault.getAbstractFileByPath(univerMdPath);
+  if (univerMdFile instanceof TFile) return univerMdFile;
 
   const sheetMdPath = filePath.endsWith('.sheet.md') ? filePath : `${filePath}.sheet.md`;
   const sheetMdFile = plugin.app.vault.getAbstractFileByPath(sheetMdPath);

@@ -33,10 +33,10 @@ export function setupImportExport(
   componentManager.register('ExportXlsxIcon', ExportIcon);
   componentManager.register('OutgoingLinkIcon', LinkIcon);
 
-  const importCommandId = 'sheet-free.import-xlsx';
-  const exportCommandId = 'sheet-free.export-xlsx';
-  const addOutgoingLinkId = 'sheet-free.add-outgoing-link';
-  const addEmbedLinkId = 'sheet-free.add-embed-link';
+  const importCommandId = 'excel.import-xlsx';
+  const exportCommandId = 'excel.export-xlsx';
+  const addOutgoingLinkId = 'excel.add-outgoing-link';
+  const addEmbedLinkId = 'excel.add-embed-link';
 
   const handleImport = () => {
     const input = document.createElement('input');
@@ -330,7 +330,7 @@ function insertOutgoingLink(univerAPI: FUniver, app: App, file: TFile): void {
       },
     });
   } catch (e) {
-    console.error('SheetFree: insert outgoing link error:', e);
+    console.error('Excel: insert outgoing link error:', e);
   }
 }
 
@@ -342,7 +342,20 @@ function copyEmbedLink(univerAPI: FUniver): void {
   const activeSheet = activeWorkbook.getActiveSheet();
   if (!activeSheet) return;
 
-  const sheetName = activeSheet.getSheet().name;
+  let sheetName: string | undefined;
+  try {
+    sheetName = (activeSheet as any).getName?.() || activeSheet.getSheet()?.name;
+  } catch {
+    sheetName = undefined;
+  }
+  if (!sheetName) {
+    const sheetId = activeSheet.getSheetId();
+    const workbookData = (activeWorkbook as any).save();
+    if (workbookData?.sheets?.[sheetId]?.name) {
+      sheetName = workbookData.sheets[sheetId].name;
+    }
+  }
+
   const selection = activeSheet.getSelection()?.getActiveRange();
 
   let rangeStr = '';
