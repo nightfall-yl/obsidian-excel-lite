@@ -169,7 +169,7 @@ export default class ExcelPlugin extends Plugin {
 
   private formatFilenameWithTimestamp(prefix: string, format: string): string {
     const timestamp = format ? window.moment().format(format) : '';
-    return `${prefix}${timestamp}`;
+    return `${prefix}${timestamp}`.trim() || 'Excel';
   }
 
   private async checkAndCreateFolder(folderPath: string): Promise<void> {
@@ -261,7 +261,7 @@ class ExcelSettingTab extends PluginSettingTab {
           .setPlaceholder('YYYY-MM-DD HH.mm.ss')
           .setValue(this.plugin.settings.fileTimeFormat)
           .onChange(async (value) => {
-            this.plugin.settings.fileTimeFormat = value || 'YYYY-MM-DD HH.mm.ss';
+            this.plugin.settings.fileTimeFormat = value;
             await this.plugin.saveSettings();
           })));
 

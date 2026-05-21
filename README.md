@@ -2,7 +2,7 @@
 
 > 基于 [Univer](https://github.com/dream-num/univer) 的免费 Obsidian 电子表格插件。
 
-[![Version](https://img.shields.io/badge/version-26.5.4-blue)](https://github.com/nightfall/obsidian-excel)
+[![Version](https://img.shields.io/badge/version-26.5.5-blue)](https://github.com/nightfall/obsidian-excel)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Obsidian](https://img.shields.io/badge/Obsidian-0.15.0%2B-purple)](https://obsidian.md)
 中文 | [English](README.en.md)

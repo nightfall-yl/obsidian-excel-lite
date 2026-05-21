@@ -1,4 +1,4 @@
-import type { ICommand, Injector } from '@univerjs/core';
+import type { ICommand } from '@univerjs/core';
 import {
   CommandType,
   ICommandService,
@@ -21,7 +21,7 @@ import type { App, TFile } from 'obsidian';
 type OnImportCallback = (data: IWorkbookData) => void;
 
 export function setupImportExport(
-  injector: Injector,
+  injector: any,
   univerAPI: FUniver,
   onImport: OnImportCallback,
 ): () => void {
@@ -196,7 +196,7 @@ function showOutgoingLinkModal(univerAPI: FUniver, app: App): void {
   const activeWorkbook = univerAPI.getActiveWorkbook();
   if (!activeWorkbook) return;
 
-  const activeSheet = activeWorkbook.getActiveSheet();
+  const activeSheet = (activeWorkbook as any).getActiveSheet();
   if (!activeSheet) return;
 
   const selection = activeSheet.getSelection();
@@ -308,7 +308,7 @@ function insertOutgoingLink(univerAPI: FUniver, app: App, file: TFile): void {
   const linkText = app.metadataCache.fileToLinktext(file, sourcePath, true);
   const wikiLink = `[[${linkText}]]`;
 
-  const activeSheet = activeWorkbook.getActiveSheet();
+  const activeSheet = (activeWorkbook as any).getActiveSheet();
   if (!activeSheet) return;
 
   const range = activeSheet.getSelection()?.getActiveRange();
@@ -318,7 +318,7 @@ function insertOutgoingLink(univerAPI: FUniver, app: App, file: TFile): void {
   const col = range.getColumn();
 
   try {
-    univerAPI.executeCommand(AddHyperLinkCommand.id, {
+    (univerAPI as any).executeCommand(AddHyperLinkCommand.id, {
       unitId: activeWorkbook.getId(),
       subUnitId: activeSheet.getSheet().id,
       link: {
@@ -339,7 +339,7 @@ function copyEmbedLink(univerAPI: FUniver): void {
   if (!activeWorkbook) return;
 
   const workbookId = activeWorkbook.getId();
-  const activeSheet = activeWorkbook.getActiveSheet();
+  const activeSheet = (activeWorkbook as any).getActiveSheet();
   if (!activeSheet) return;
 
   let sheetName: string | undefined;

@@ -208,7 +208,7 @@ export function createUniverInstance(
     const cmdInjector = univer.__getInjector();
     const commandService = cmdInjector.get(ICommandService);
     const localeService = cmdInjector.get(LocaleService);
-    commandService.onCommandExecuted((commandInfo) => {
+    commandService.onCommandExecuted((commandInfo: any) => {
       if (commandInfo.id === 'sheet.command.insert-sheet') {
         const correctPrefix = localeService.t('sheets.tabs.sheet');
 
@@ -216,13 +216,13 @@ export function createUniverInstance(
           try {
             const activeWorkbook = univerAPI.getActiveWorkbook();
             if (!activeWorkbook) return;
-            const activeSheet = activeWorkbook.getActiveSheet();
+            const activeSheet = (activeWorkbook as any).getActiveSheet();
             if (!activeSheet) return;
             const currentName = activeSheet.getSheetName();
 
             if (currentName.startsWith('Sheet')) {
               // Find the next available number for the locale prefix
-              const existingSheets = activeWorkbook.getSheets();
+              const existingSheets = (activeWorkbook as any).getSheets();
               const usedNumbers = new Set<number>();
               for (const sheet of existingSheets) {
                 const m = sheet.getSheetName().match(new RegExp(`^${correctPrefix}(\\d+)$`));
@@ -331,12 +331,10 @@ function registerMobileEditPlugins(univer: Univer, container: string | HTMLEleme
     header: options?.header ?? true,
     footer: options?.footer ?? true,
     toolbar: options?.toolbar ?? true,
-    disableAutoFocus: false,
   });
   univer.registerPlugin(UniverDocsUIPlugin);
   univer.registerPlugin(UniverSheetsPlugin);
   univer.registerPlugin(UniverSheetsMobileUIPlugin, {
-    disableAutoFocus: false,
   });
   univer.registerPlugin(UniverSheetsFilterPlugin);
   univer.registerPlugin(UniverSheetsNumfmtPlugin);

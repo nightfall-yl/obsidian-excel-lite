@@ -1,7 +1,7 @@
 import type { IWorkbookData } from '@univerjs/core';
 import { LifecycleStages } from '@univerjs/core';
 import type { Plugin } from 'obsidian';
-import { Platform, TFile } from 'obsidian';
+import { MarkdownRenderChild, Platform, TFile } from 'obsidian';
 import { parseSheetFile } from './data-utils';
 import { SHEET_FRONTMATTER_KEYS } from './constants';
 import { createUniverInstance } from './setup-univer';
@@ -178,19 +178,34 @@ function createUniverEmbedElement(
   height: number,
   showFooter: boolean,
   plugin: any,
+  ctx: any,
 ): HTMLDivElement {
   const embedEl = document.createElement('div');
   embedEl.className = 'excel-embed-univer';
   embedEl.style.height = `${height}px`;
   embedEl.style.width = '100%';
 
+  let disposed = false;
+  let disposeUniver: (() => void) | null = null;
+
+  const cleanup = () => {
+    if (disposed) return;
+    disposed = true;
+    observer.disconnect();
+    if (disposeUniver) {
+      disposeUniver();
+      disposeUniver = null;
+    }
+  };
+
   const observer = new MutationObserver(() => {
+    if (disposed) return;
     if (!document.body.contains(embedEl)) return;
 
     observer.disconnect();
 
     const isDark = plugin.app.isDarkMode?.() ?? document.body.hasClass?.('theme-dark') ?? false;
-    const { univerAPI } = createUniverInstance(embedEl, isDark, plugin.app, !Platform.isDesktopApp, {
+    const { univerAPI, univer } = createUniverInstance(embedEl, isDark, plugin.app, !Platform.isDesktopApp, {
       header: false,
       footer: showFooter,
       toolbar: false,
@@ -198,26 +213,46 @@ function createUniverEmbedElement(
       embedMode: true,
     });
 
+    let lifecycleDisposable: { dispose: () => void } | null = null;
+    disposeUniver = () => {
+      try {
+        lifecycleDisposable?.dispose();
+      } catch {
+        // ignore cleanup failures from already-disposed Univer internals
+      }
+      try {
+        univer.dispose();
+      } catch {
+        // ignore cleanup failures from already-disposed Univer internals
+      }
+    };
+
     const workbook = univerAPI.createWorkbook(workbookData);
-    univerAPI.addEvent(univerAPI.Event.LifeCycleChanged, async (event: any) => {
+    lifecycleDisposable = univerAPI.addEvent(univerAPI.Event.LifeCycleChanged, async (event: any) => {
       if (event.stage !== LifecycleStages.Rendered) return;
 
       try {
-        const permission = workbook?.getWorkbookPermission?.();
+        const permission = (workbook as any)?.getWorkbookPermission?.();
         await permission?.setReadOnly?.();
-        univerAPI.setPermissionDialogVisible?.(false);
+        (univerAPI as any).setPermissionDialogVisible?.(false);
       } catch {
-        // Readonly APIs vary a little across Univer facade versions.
       }
-    });
+    }) as any;
   });
 
   observer.observe(document.body, { childList: true, subtree: true });
+
+  ctx?.addChild?.(new class extends MarkdownRenderChild {
+    onunload(): void {
+      cleanup();
+    }
+  }(embedEl));
+
   return embedEl;
 }
 
 export function registerEmbedLinkProcessor(plugin: any): void {
-  plugin.registerMarkdownCodeBlockProcessor('sheet-embed', async (source, el) => {
+  plugin.registerMarkdownCodeBlockProcessor('sheet-embed', async (source: any, el: any) => {
     el.createEl('p', { text: 'Sheet embed block', cls: 'excel-embed-placeholder' });
   });
 
@@ -229,7 +264,7 @@ export function registerEmbedLinkProcessor(plugin: any): void {
       return;
     }
 
-    await processReadingMode(internalEmbeds, plugin);
+    await processReadingMode(internalEmbeds, ctx, plugin);
   };
 
   plugin.registerMarkdownPostProcessor(processor);
@@ -240,10 +275,8 @@ async function processEditMode(el: HTMLElement, ctx: any, plugin: any): Promise<
   if (!(file instanceof TFile)) return;
   if (!plugin.isSheetFile(file)) return;
 
-  // @ts-expect-error
   if (ctx.remainingNestLevel < 4) return;
 
-  // @ts-expect-error
   const containerEl = ctx.containerEl;
   let embedDiv: HTMLElement = containerEl;
 
@@ -290,7 +323,7 @@ async function processEditMode(el: HTMLElement, ctx: any, plugin: any): Promise<
     const data = await plugin.app.vault.read(file);
     const src = embedDiv.getAttribute('src') ?? file.path.slice(0, -(file.extension.length + 1));
     const alt = embedDiv.getAttribute('alt') ?? '';
-    const sheetDiv = await createEmbedLinkDiv(src, alt, file, data, plugin);
+    const sheetDiv = await createEmbedLinkDiv(src, alt, file, data, plugin, ctx);
     embedDiv.appendChild(sheetDiv);
 
     if (isMarkdownEmbed) {
@@ -311,7 +344,7 @@ async function processEditMode(el: HTMLElement, ctx: any, plugin: any): Promise<
   const src = embedDiv.getAttribute('src') ?? file.path.slice(0, -(file.extension.length + 1));
   const alt = embedDiv.getAttribute('alt') ?? '';
 
-  const sheetDiv = await createEmbedLinkDiv(src, alt, file, data, plugin);
+  const sheetDiv = await createEmbedLinkDiv(src, alt, file, data, plugin, ctx);
   embedDiv.appendChild(sheetDiv);
 
   if (isMarkdownEmbed) {
@@ -320,20 +353,20 @@ async function processEditMode(el: HTMLElement, ctx: any, plugin: any): Promise<
   }
 }
 
-async function processReadingMode(internalEmbeds: NodeListOf<Element>, plugin: any): Promise<void> {
+async function processReadingMode(internalEmbeds: NodeListOf<Element>, ctx: any, plugin: any): Promise<void> {
   for (const embedEl of Array.from(internalEmbeds)) {
     const src = embedEl.getAttribute('src') || '';
     const alt = embedEl.getAttribute('alt') || '';
 
     if ((embedEl as HTMLElement).hasClass?.('excel-embed-file-label')) continue;
-    if (!isSheetEmbed(src, alt, plugin)) continue;
+    if (!isSheetEmbed(src, alt, plugin, ctx.sourcePath)) continue;
 
-    const targetFile = resolveSheetFile(src, plugin);
+    const targetFile = resolveSheetFile(src, plugin, ctx.sourcePath);
     if (!targetFile) continue;
 
     try {
       const data = await plugin.app.vault.read(targetFile);
-      const sheetDiv = await createEmbedLinkDiv(src, alt, targetFile, data, plugin);
+      const sheetDiv = await createEmbedLinkDiv(src, alt, targetFile, data, plugin, ctx);
       embedEl.replaceWith(sheetDiv);
     } catch (e) {
       console.error('Excel: embed link render error:', e);
@@ -347,6 +380,7 @@ async function createEmbedLinkDiv(
   file: TFile,
   data: string,
   plugin: any,
+  ctx: any,
 ): Promise<HTMLDivElement> {
   const workbookData = parseSheetFile(data, file.path);
   if (!workbookData) {
@@ -419,45 +453,56 @@ async function createEmbedLinkDiv(
     effectiveHeight,
     plugin.settings.showEmbedBottomContent,
     plugin,
+    ctx,
   );
   container.appendChild(univerEl);
 
   return container;
 }
 
-function isSheetEmbed(src: string, _alt: string, plugin: Plugin): boolean {
+function isSheetEmbed(src: string, _alt: string, plugin: Plugin, sourcePath = ''): boolean {
   const filePath = src.split('#')[0];
   if (!filePath) return false;
 
   if (filePath.endsWith('.sheet.md') || filePath.endsWith('.sheet') || filePath.endsWith('.univer.md')) return true;
 
-  const file = resolveSheetFile(src, plugin);
+  const file = resolveSheetFile(src, plugin, sourcePath);
   return !!file;
 }
 
-function resolveSheetFile(src: string, plugin: Plugin): TFile | null {
+function isSheetTarget(file: TFile, plugin: Plugin): boolean {
+  if (file.path.endsWith('.sheet.md') || file.path.endsWith('.sheet') || file.path.endsWith('.univer.md')) {
+    return true;
+  }
+
+  const cache = plugin.app.metadataCache.getFileCache(file);
+  return !!(cache?.frontmatter && SHEET_FRONTMATTER_KEYS.some(key => cache.frontmatter![key]));
+}
+
+function resolveSheetFile(src: string, plugin: Plugin, sourcePath = ''): TFile | null {
   const filePath = src.split('#')[0];
   if (!filePath) return null;
 
-  const directFile = plugin.app.vault.getAbstractFileByPath(filePath);
-  if (directFile instanceof TFile) return directFile;
+  const candidates = [
+    filePath,
+    filePath.endsWith('.md') ? filePath : `${filePath}.md`,
+    filePath.endsWith('.univer.md') ? filePath : `${filePath}.univer.md`,
+    filePath.endsWith('.sheet.md') ? filePath : `${filePath}.sheet.md`,
+  ];
 
-  const mdPath = filePath.endsWith('.md') ? filePath : `${filePath}.md`;
-  const mdFile = plugin.app.vault.getAbstractFileByPath(mdPath);
-  if (mdFile instanceof TFile) {
-    const cache = plugin.app.metadataCache.getFileCache(mdFile);
-    if (cache?.frontmatter && SHEET_FRONTMATTER_KEYS.some(key => cache.frontmatter![key])) {
-      return mdFile;
+  for (const candidate of candidates) {
+    const linkedFile = plugin.app.metadataCache.getFirstLinkpathDest(candidate, sourcePath);
+    if (linkedFile instanceof TFile && isSheetTarget(linkedFile, plugin)) {
+      return linkedFile;
     }
   }
 
-  const univerMdPath = filePath.endsWith('.univer.md') ? filePath : `${filePath}.univer.md`;
-  const univerMdFile = plugin.app.vault.getAbstractFileByPath(univerMdPath);
-  if (univerMdFile instanceof TFile) return univerMdFile;
-
-  const sheetMdPath = filePath.endsWith('.sheet.md') ? filePath : `${filePath}.sheet.md`;
-  const sheetMdFile = plugin.app.vault.getAbstractFileByPath(sheetMdPath);
-  if (sheetMdFile instanceof TFile) return sheetMdFile;
+  for (const candidate of candidates) {
+    const directFile = plugin.app.vault.getAbstractFileByPath(candidate);
+    if (directFile instanceof TFile && isSheetTarget(directFile, plugin)) {
+      return directFile;
+    }
+  }
 
   return null;
 }

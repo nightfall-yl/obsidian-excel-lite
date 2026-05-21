@@ -1,0 +1,11 @@
+declare module 'react';
+declare module 'react/jsx-runtime';
+declare module 'async-lock';
+declare module '@wendellhu/redi';
+declare module '@wendellhu/redi/react-bindings';
+declare module 'lodash-es';
+declare module 'rbush';
+declare module 'fast-diff';
+declare module 'class-variance-authority/types';
+declare module '@univerjs/sheets-note-ui';
+declare module 'opentype.js';

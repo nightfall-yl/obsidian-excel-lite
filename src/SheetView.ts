@@ -155,16 +155,16 @@ export class SheetView extends TextFileView {
     if (this.currentSheetId) {
       const activeWorkbook = this.univerAPI.getActiveWorkbook();
       if (activeWorkbook) {
-        activeWorkbook.setActiveSheet(this.currentSheetId);
+        (activeWorkbook as any).setActiveSheet(this.currentSheetId);
       }
     }
 
     if (this.isMobilePreviewMode) {
       const activeWorkbook = this.univerAPI.getActiveWorkbook();
       if (activeWorkbook) {
-        const permission = activeWorkbook.getWorkbookPermission();
+        const permission = (activeWorkbook as any).getWorkbookPermission();
         permission.setReadOnly();
-        this.univerAPI.setPermissionDialogVisible(false);
+        (this.univerAPI as any).setPermissionDialogVisible(false);
       }
     }
   }
@@ -175,7 +175,7 @@ export class SheetView extends TextFileView {
     if (this.univerAPI) {
       const activeWorkbook = this.univerAPI.getActiveWorkbook();
       if (activeWorkbook) {
-        const activeSheet = activeWorkbook.getActiveSheet();
+        const activeSheet = (activeWorkbook as any).getActiveSheet();
         if (activeSheet) {
           this.currentSheetId = activeSheet.getSheetId();
         }

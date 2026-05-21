@@ -78,7 +78,7 @@ export function xlsxToWorkbookData(buffer: ArrayBuffer, fileName: string): IWork
   const sheetOrder: string[] = [];
   const styles: Record<string, IStyleData> = {};
 
-  const wbStyles = workbook.Styles as any;
+  const wbStyles = (workbook as any).Styles;
   const fonts: any[] = wbStyles?.Fonts || [];
   const fills: any[] = wbStyles?.Fills || [];
   const cellXfs: any[] = wbStyles?.CellXf || [];
@@ -180,7 +180,7 @@ export function xlsxToWorkbookData(buffer: ArrayBuffer, fileName: string): IWork
       }
 
       if (cell.z) {
-        cellValue.n = { pattern: String(cell.z) };
+        (cellValue as any).n = { pattern: String(cell.z) };
       }
 
       if (cell.s) {
@@ -303,8 +303,8 @@ export function workbookDataToXlsx(data: IWorkbookData): ArrayBuffer {
           xlsxCell.t = 's';
         }
 
-        if (cell.n?.pattern) {
-          xlsxCell.z = cell.n.pattern;
+        if ((cell as any).n?.pattern) {
+          xlsxCell.z = (cell as any).n.pattern;
         }
 
         if (cell.s != null) {
