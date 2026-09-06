@@ -310,8 +310,9 @@ export function workbookDataToXlsx(data: IWorkbookData): ArrayBuffer {
           xlsxCell.t = 's';
         }
 
-        if ((cell as ICellData & { n?: { pattern: string } }).n?.pattern) {
-          xlsxCell.z = (cell as ICellData & { n?: { pattern: string } }).n.pattern;
+        const cellWithN = cell as ICellData & { n?: { pattern: string } };
+        if (cellWithN.n?.pattern) {
+          xlsxCell.z = cellWithN.n.pattern;
         }
 
         if (cell.s != null) {
@@ -382,7 +383,7 @@ export function workbookDataToXlsx(data: IWorkbookData): ArrayBuffer {
     XLSX.utils.book_append_sheet(wb, ws, sheet.name || 'Sheet1');
   }
 
-  const buf = XLSX.write(wb, { type: 'array', bookType: 'xlsx', cellStyles: true });
+  const buf: ArrayBuffer = XLSX.write(wb, { type: 'array', bookType: 'xlsx', cellStyles: true }) as ArrayBuffer;
   return buf;
 }
 

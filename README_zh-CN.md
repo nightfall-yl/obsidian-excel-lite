@@ -1,4 +1,4 @@
-# obsidian-excel
+# Excel Lite
 
 > 基于 [Univer](https://github.com/dream-num/univer) 的免费 Obsidian 电子表格插件。
 
@@ -22,8 +22,8 @@
 
 ### 导入 / 导出
 
-- **导入 `.xlsx` 文件** — 直接打开现有 Excel 工作簿
-- **导出为 `.xlsx`** — 将表格保存为标准 Excel 文件
+- **导入 `.xlsx` / `.csv` 文件** — 直接打开现有 Excel 工作簿或 CSV 文件
+- **导出为 `.xlsx` / `.csv`** — 将表格保存为标准 Excel 或 CSV 文件
 - **嵌入链接** — 在单元格中引用其他 Obsidian 笔记作为嵌入内容
 
 ### 移动端支持

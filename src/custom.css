@@ -1,48 +1,48 @@
 /* Fix formula-bar: DefinedName input taller than formula editor */
-[data-u-comp="formula-bar"] {
-  align-items: stretch !important;
+.excel-container [data-u-comp="formula-bar"] {
+  align-items: stretch;
 }
 
 /* Remove inconsistent vertical padding from DefinedName, use centering instead */
-[data-u-comp="defined-name"] {
-  padding-top: 0 !important;
-  padding-bottom: 0 !important;
-  align-items: center !important;
+.excel-container [data-u-comp="defined-name"] {
+  padding-top: 0;
+  padding-bottom: 0;
+  align-items: center;
 }
 
 /* Remove inconsistent vertical padding from Fx icons area */
-[data-u-comp="formula-bar"] > div:nth-child(2) > div:first-child {
-  padding-top: 0 !important;
-  padding-bottom: 0 !important;
-  align-items: center !important;
+.excel-container [data-u-comp="formula-bar"] > div:nth-child(2) > div:first-child {
+  padding-top: 0;
+  padding-bottom: 0;
+  align-items: center;
 }
 
 /* Mobile sheet bar: rounded tabs */
-[role="tablist"][aria-label="Sheet tabs"] {
-  padding: 4px 6px !important;
-  gap: 4px !important;
-  border: none !important;
+.excel-mobile-preview [role="tablist"][aria-label="Sheet tabs"] {
+  padding: 4px 6px;
+  gap: 4px;
+  border: none;
 }
 
-[role="tablist"][aria-label="Sheet tabs"] > div {
-  gap: 0 !important;
+.excel-mobile-preview [role="tablist"][aria-label="Sheet tabs"] > div {
+  gap: 0;
 }
 
-[role="tablist"][aria-label="Sheet tabs"] [role="tab"] {
-  border-radius: 4px !important;
-  border: none !important;
-  padding: 4px 12px !important;
-  margin: 0 2px !important;
-  transition: background-color 0.15s ease, color 0.15s ease !important;
+.excel-mobile-preview [role="tablist"][aria-label="Sheet tabs"] [role="tab"] {
+  border-radius: 4px;
+  border: none;
+  padding: 4px 12px;
+  margin: 0 2px;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
-[role="tablist"][aria-label="Sheet tabs"] [role="tab"][aria-selected="true"] {
-  font-weight: 600 !important;
+.excel-mobile-preview [role="tablist"][aria-label="Sheet tabs"] [role="tab"][aria-selected="true"] {
+  font-weight: 600;
 }
 
 /* Remove active tab top accent line */
-[role="tablist"][aria-label="Sheet tabs"] [role="tab"] > div.univer-absolute {
-  display: none !important;
+.excel-mobile-preview [role="tablist"][aria-label="Sheet tabs"] [role="tab"] > div.univer-absolute {
+  display: none;
 }
 
 .excel-container {
@@ -52,8 +52,8 @@
   box-sizing: border-box;
 }
 
-.excel-content {
-  padding: 0 !important;
+.view-content.excel-content {
+  padding: 0;
 }
 
 .excel-folder-input {
@@ -79,12 +79,12 @@
 
 /* Move sheet bar from footer to top in mobile preview mode */
 .excel-mobile-preview [data-u-comp="app-layout"] > section {
-  display: flex !important;
-  flex-direction: column !important;
+  display: flex;
+  flex-direction: column;
 }
 
 .excel-mobile-preview [data-u-comp="app-layout"] > section > footer {
-  order: -1 !important;
+  order: -1;
 }
 
 .excel-mobile-preview .univer-container {
@@ -98,19 +98,19 @@
 .excel-mobile-preview input,
 .excel-mobile-preview textarea,
 .excel-mobile-preview [contenteditable="true"] {
-  pointer-events: none !important;
-  -webkit-user-select: none !important;
-  user-select: none !important;
-  caret-color: transparent !important;
+  pointer-events: none;
+  -webkit-user-select: none;
+  user-select: none;
+  caret-color: transparent;
 }
 
 .excel-readonly input,
 .excel-readonly textarea,
 .excel-readonly [contenteditable="true"] {
-  pointer-events: none !important;
-  -webkit-user-select: none !important;
-  user-select: none !important;
-  caret-color: transparent !important;
+  pointer-events: none;
+  -webkit-user-select: none;
+  user-select: none;
+  caret-color: transparent;
 }
 
 .excel-outgoing-link-modal-overlay {

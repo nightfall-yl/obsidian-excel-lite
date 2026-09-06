@@ -92,7 +92,7 @@ export class SheetView extends TextFileView {
       }
 
       await super.save();
-    } catch (e) {
+    } catch (e: unknown) {
       console.error('Excel save error:', e);
     } finally {
       this.isSaving = false;
@@ -241,8 +241,8 @@ export class SheetView extends TextFileView {
       this.renderUniver(workbookData);
 
       new Notice(t('IMPORT_SUCCESS'));
-    } catch (err) {
-      new Notice(t('IMPORT_FAILED') + err);
+    } catch (err: unknown) {
+      new Notice(t('IMPORT_FAILED') + String(err));
       console.error('Import error:', err);
     }
   }

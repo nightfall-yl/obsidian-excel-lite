@@ -9,6 +9,7 @@ import {
   PluginSettingTab,
   AbstractInputSuggest,
   App,
+  type SettingDefinitionItem,
 } from 'obsidian';
 import { around } from 'monkey-around';
 import { VIEW_TYPE_SHEET, BLANK_CONTENT, SHEET_FRONTMATTER_KEYS } from './constants';
@@ -56,7 +57,7 @@ export default class ExcelPlugin extends Plugin {
       this.addCommand({
         id: 'create-sheet',
         name: t('CREATE_SHEET'),
-        hotkeys: [{ modifiers: ['Mod', 'Shift'], key: 'e' }],
+        hotkeys: [],
         callback: () => {
           void this.createAndOpenSheet(this.settings.folder);
         },
@@ -226,6 +227,78 @@ class ExcelSettingTab extends PluginSettingTab {
   constructor(plugin: ExcelPlugin, app: App) {
     super(app, plugin);
     this.plugin = plugin;
+  }
+
+  getSettingDefinitions(): SettingDefinitionItem[] {
+    return [
+      {
+        type: 'group',
+        heading: t('SETTINGS_FILE_TITLE'),
+        items: [
+          {
+            name: t('SETTING_FILENAME_PREFIX'),
+            desc: t('SETTING_FILENAME_PREFIX_DESC'),
+            control: {
+              type: 'text',
+              key: 'filenamePrefix',
+              placeholder: 'Excel ',
+            },
+          },
+          {
+            name: t('SETTING_FOLDER'),
+            desc: t('SETTING_FOLDER_DESC'),
+            control: {
+              type: 'folder',
+              key: 'folder',
+              placeholder: '/',
+              includeRoot: true,
+            },
+          },
+          {
+            name: t('SETTING_FILE_TIME_FORMAT'),
+            desc: t('SETTING_FILE_TIME_FORMAT_DESC'),
+            control: {
+              type: 'text',
+              key: 'fileTimeFormat',
+              placeholder: 'YYYY-MM-DD HH.mm.ss',
+            },
+          },
+        ],
+      },
+      {
+        type: 'group',
+        heading: t('SETTINGS_EMBED_TITLE'),
+        items: [
+          {
+            name: t('SETTING_EMBED_HEIGHT'),
+            desc: t('SETTING_EMBED_HEIGHT_DESC'),
+            control: {
+              type: 'number',
+              key: 'embedTableHeight',
+              placeholder: '300',
+              min: 50,
+              max: 2000,
+            },
+          },
+          {
+            name: t('SETTING_SHOW_JUMP_ORIGINAL'),
+            desc: t('SETTING_SHOW_JUMP_ORIGINAL_DESC'),
+            control: {
+              type: 'toggle',
+              key: 'showJumpToOriginal',
+            },
+          },
+          {
+            name: t('SETTING_SHOW_EMBED_BOTTOM'),
+            desc: t('SETTING_SHOW_EMBED_BOTTOM_DESC'),
+            control: {
+              type: 'toggle',
+              key: 'showEmbedBottomContent',
+            },
+          },
+        ],
+      },
+    ];
   }
 
   display(): void {

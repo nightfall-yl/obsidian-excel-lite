@@ -1,4 +1,4 @@
-# obsidian-excel
+# Excel Lite
 
 > Free Excel-like spreadsheet plugin for Obsidian, powered by [Univer](https://github.com/dream-num/univer).
 
@@ -22,8 +22,8 @@
 
 ### Import / Export
 
-- **Import `.xlsx` files** — Open existing Excel workbooks directly
-- **Export to `.xlsx`** — Save your sheets as standard Excel files
+- **Import `.xlsx` / `.csv` files** — Open existing Excel workbooks or CSV files directly
+- **Export to `.xlsx` / `.csv`** — Save your sheets as standard Excel or CSV files
 - **Embed links** — Reference other Obsidian notes as embedded content within cells
 
 ### Mobile Support

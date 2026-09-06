@@ -1,7 +1,7 @@
 {
   "name": "excel-lite",
   "version": "1.0.0",
-  "description": "Free Excel-like spreadsheet plugin for Obsidian with xlsx import/export, based on Univer",
+  "description": "Free Excel-like spreadsheet plugin with xlsx import/export, based on Univer.",
   "main": "main.js",
   "type": "module",
   "scripts": {
@@ -64,9 +64,11 @@
     "@univerjs/thread-comment": "0.25.1",
     "@univerjs/thread-comment-ui": "0.25.1",
     "@univerjs/ui": "0.25.1",
-    "dotenv": "^17.4.2",
     "monkey-around": "^3.0.0",
     "opentype.js": "^1.3.5",
     "xlsx": "npm:@stackline/xlsx@^1.0.6"
+  },
+  "overrides": {
+    "nanoid": "5.1.16"
   }
 }

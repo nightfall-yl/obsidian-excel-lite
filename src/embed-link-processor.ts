@@ -88,7 +88,8 @@ function getCellValue(cell: any): string {
   if (!cell) return '';
   if (cell.v !== undefined && cell.v !== null) return String(cell.v);
   if (cell.p?.body?.dataStream) {
-    return cell.p.body.dataStream.replace(/\r?\n$/, '').replace(/\n/g, ' ');
+    const stream: string = cell.p.body.dataStream;
+    return stream.replace(/\r?\n$/, '').replace(/\n/g, ' ');
   }
   return '';
 }

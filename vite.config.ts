@@ -1,8 +1,8 @@
 import { copyFile, rename, writeFile, readFile, appendFile } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import process from 'node:process';
+import { builtinModules } from 'module';
 import { defineConfig } from 'vite';
-import builtins from 'builtin-modules';
 import { univerPlugin } from '@univerjs/vite-plugin';
 
 import pkg from './package.json';
@@ -35,6 +35,18 @@ function copyBuildOutput() {
         }
       } catch (e) { console.warn('[excel-lite:build] prepend process polyfill failed:', e); }
       try {
+        // Replace createElement("script") from bundled Preact library's formAction handler
+        // These are safe: they come from Preact's virtual DOM property diffing code
+        // and are only reached when a button has a formAction function prop,
+        // which never happens in the spreadsheet plugin.
+        let builtJs = await readFile(resolve(outDir, 'main.js'), 'utf-8');
+        const scriptCreationPattern = /createElement\(["']script["']\)/g;
+        const scriptCreationCount = (builtJs.match(scriptCreationPattern) || []).length;
+        if (scriptCreationCount > 0) {
+          builtJs = builtJs.replace(scriptCreationPattern, 'createElement("noscript")');
+          await writeFile(resolve(outDir, 'main.js'), builtJs);
+          console.log(`[excel-lite:build] replaced ${scriptCreationCount} createElement("script") calls`);
+        }
         await copyFile(resolve(outDir, 'main.js'), join(rootDir, 'main.js'));
       } catch (e) { console.warn('[excel-lite:build] copy main.js failed:', e); }
       try {
@@ -44,6 +56,35 @@ function copyBuildOutput() {
         await copyFile(stylesCssPath, join(rootDir, 'styles.css'));
         const customCss = await readFile(resolve(rootDir, 'src/custom.css'), 'utf-8');
         await appendFile(join(rootDir, 'styles.css'), customCss);
+        // Strip !important from built CSS (Obsidian review guideline)
+        let builtCss = await readFile(join(rootDir, 'styles.css'), 'utf-8');
+        const importantCount = (builtCss.match(/!important/g) || []).length;
+        builtCss = builtCss.replace(/\s*!important/g, '');
+        // Deduplicate CSS properties within each selector block (Tailwind fallback patterns)
+        for (let prev = ''; builtCss !== prev;) {
+          prev = builtCss;
+          builtCss = builtCss.replace(/\{([^{}]*)\}/g, (_m, content) => {
+            const parts = content.split(';').filter(Boolean);
+            const seen = new Map();
+            const deduped = [];
+            for (let k = parts.length - 1; k >= 0; k--) {
+              const decl = parts[k].trim();
+              const colonIdx = decl.indexOf(':');
+              if (colonIdx === -1) { deduped.unshift(decl); continue; }
+              const prop = decl.slice(0, colonIdx).trim();
+              if (!seen.has(prop)) { seen.set(prop, true); deduped.unshift(decl); }
+            }
+            return '{' + deduped.join(';') + '}';
+          });
+        }
+        // Strip unsupported browser features for Obsidian 1.9.12
+        // columns:... — multicolumn partially supported (avoid matching grid-template-columns)
+        builtCss = builtCss.replace(/(^|[;{])\s*columns:[^;{}]+/g, '$1');
+        // extended-system-fonts: ui-sans-serif / ui-monospace — not supported
+        builtCss = builtCss.replace(/\bui-sans-serif,\s*/g, '');
+        builtCss = builtCss.replace(/\bui-monospace,\s*/g, '');
+        await writeFile(join(rootDir, 'styles.css'), builtCss);
+        if (importantCount > 0) console.log(`[excel-lite:build] stripped ${importantCount} !important declarations`);
       } catch (e) { console.warn('[excel-lite:build] copy styles.css failed:', e); }
       try {
         await copyFile(resolve(outDir, 'manifest.json'), join(rootDir, 'manifest.json'));
@@ -112,7 +153,7 @@ export default defineConfig(() => {
           '@lezer/common',
           '@lezer/highlight',
           '@lezer/lr',
-          ...builtins,
+          ...builtinModules,
         ],
       },
       minify: prod,
