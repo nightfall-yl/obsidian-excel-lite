@@ -1,0 +1,43 @@
+name: Release Obsidian plugin
+
+on:
+  push:
+    tags:
+      - "*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.x"
+          cache: npm
+
+      - name: Build
+        run: |
+          npm ci
+          npm run build
+
+      - name: Package
+        run: |
+          mkdir dist/excel-lite
+          cp main.js manifest.json styles.css dist/excel-lite/
+          zip -rj excel-lite.zip dist/excel-lite
+          ls -la main.js manifest.json styles.css excel-lite.zip
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            main.js
+            manifest.json
+            styles.css
+            excel-lite.zip
+          generate_release_notes: true
