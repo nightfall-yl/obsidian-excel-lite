@@ -24,7 +24,7 @@ export function normalizePath(p: string): string {
   return p;
 }
 
-export function debounce(fn: Function, _wait: number): Function {
+export function debounce(fn: (...args: unknown[]) => unknown, _wait: number): (...args: unknown[]) => unknown {
   return fn;
 }
 

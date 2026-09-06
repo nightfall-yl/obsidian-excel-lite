@@ -14,16 +14,17 @@ const INDEXED_COLORS = [
   '#333300', '#993300', '#993366', '#333399', '#333333',
 ];
 
-function parseXlsxColor(colorObj: any): string | null {
+function parseXlsxColor(colorObj: unknown): string | null {
   if (!colorObj) return null;
-  if (colorObj.rgb) {
-    const raw = String(colorObj.rgb).trim();
+  const c = colorObj as { rgb?: string; indexed?: number };
+  if (c.rgb) {
+    const raw = c.rgb.trim();
     const hex = raw.replace(/^#/, '');
     if (/^[0-9A-Fa-f]{6}$/.test(hex)) return `#${hex}`;
     if (/^[0-9A-Fa-f]{8}$/.test(hex)) return `#${hex.slice(-6)}`;
   }
-  if (typeof colorObj.indexed === 'number' && INDEXED_COLORS[colorObj.indexed]) {
-    return INDEXED_COLORS[colorObj.indexed];
+  if (typeof c.indexed === 'number' && INDEXED_COLORS[c.indexed]) {
+    return INDEXED_COLORS[c.indexed];
   }
   return null;
 }
@@ -38,6 +39,13 @@ function generateStyleId(styles: Record<string, IStyleData>, style: IStyleData):
   return newId;
 }
 
+interface RowInfo { h: number; hd: BooleanNumber; }
+interface ColumnInfo { w: number; hd: BooleanNumber; }
+
+type XLSXFont = { color?: { rgb?: string; indexed?: number } };
+type XLSXFill = { patternType?: string; fgColor?: { rgb?: string; indexed?: number }; bgColor?: { rgb?: string; indexed?: number } };
+type XLSXCellXf = { fontId?: number; fontid?: number; fillId?: number; fillid?: number };
+
 function createSheetData(
   id: string,
   name: string,
@@ -45,8 +53,8 @@ function createSheetData(
   mergeData: IRange[],
   rowCount: number,
   columnCount: number,
-  rowData: any[],
-  columnData: any[],
+  rowData: RowInfo[],
+  columnData: ColumnInfo[],
 ) {
   return {
     id,
@@ -86,11 +94,11 @@ export function xlsxToWorkbookData(buffer: ArrayBuffer, fileName: string): IWork
     };
   }
   const wbStyles = (workbook as unknown as XLSXWorkbookInternal).Styles;
-  const fonts: any[] = wbStyles?.Fonts || [];
-  const fills: any[] = wbStyles?.Fills || [];
-  const cellXfs: any[] = wbStyles?.CellXf || [];
+  const fonts: XLSXFont[] = wbStyles?.Fonts || [];
+  const fills: XLSXFill[] = wbStyles?.Fills || [];
+  const cellXfs: XLSXCellXf[] = wbStyles?.CellXf || [];
 
-  function findFontColorByFill(cellFill: any): string | null {
+  function findFontColorByFill(cellFill: XLSXFill | null | undefined): string | null {
     if (!cellFill) return null;
     const pt = String(cellFill.patternType || '');
     const fgRaw = cellFill.fgColor?.rgb || '';
@@ -228,7 +236,7 @@ export function xlsxToWorkbookData(buffer: ArrayBuffer, fileName: string): IWork
     const rowCount = Math.max(maxRow + 1, 100);
     const colCount = Math.max(maxCol + 1, 26);
 
-    const rowData: any[] = [];
+    const rowData: RowInfo[] = [];
     for (let r = 0; r < rowCount; r++) {
       let h = 25;
       if (ws['!rows']?.[r]) {
@@ -239,7 +247,7 @@ export function xlsxToWorkbookData(buffer: ArrayBuffer, fileName: string): IWork
       rowData.push({ h, hd: BooleanNumber.FALSE });
     }
 
-    const columnData: any[] = [];
+    const columnData: ColumnInfo[] = [];
     for (let c = 0; c < colCount; c++) {
       let w = 100;
       if (ws['!cols']?.[c]) {
@@ -303,7 +311,7 @@ export function workbookDataToXlsx(data: IWorkbookData): ArrayBuffer {
           xlsxCell.v = cell.v as number;
           xlsxCell.t = 'n';
         } else if (cell.t === CellValueType.BOOLEAN || cell.v === true || cell.v === false) {
-          xlsxCell.v = cell.v as boolean;
+          xlsxCell.v = cell.v;
           xlsxCell.t = 'b';
         } else {
           xlsxCell.v = cell.v != null ? String(cell.v) : '';
@@ -318,7 +326,7 @@ export function workbookDataToXlsx(data: IWorkbookData): ArrayBuffer {
         if (cell.s != null) {
           const styleData = typeof cell.s === 'string' ? styles[cell.s] : cell.s;
           if (styleData) {
-            const font: any = {};
+            const font: Record<string, unknown> = {};
             if (styleData.bl) font.bold = true;
             if (styleData.it) font.italic = true;
             if (styleData.ul) font.underline = true;
@@ -330,13 +338,13 @@ export function workbookDataToXlsx(data: IWorkbookData): ArrayBuffer {
               font.color = { rgb: `FF${hex}` };
             }
 
-            const fill: any = {};
+            const fill: Record<string, unknown> = {};
             if (styleData.bg?.rgb) {
               const hex = String(styleData.bg.rgb).replace('#', '');
               fill.fgColor = { rgb: `FF${hex}` };
             }
 
-            const alignment: any = {};
+            const alignment: Record<string, unknown> = {};
             if (styleData.ht === 2) alignment.horizontal = 'center';
             else if (styleData.ht === 3) alignment.horizontal = 'right';
             if (styleData.vt === 2) alignment.vertical = 'center';
@@ -367,14 +375,14 @@ export function workbookDataToXlsx(data: IWorkbookData): ArrayBuffer {
     }
 
     if (sheet.columnData) {
-      ws['!cols'] = Object.values(sheet.columnData || {}).map((col: any) => ({
+      ws['!cols'] = Object.values(sheet.columnData || {}).map((col: ColumnInfo) => ({
         wpx: col?.w || 100,
         hidden: col?.hd === 1,
       }));
     }
 
     if (sheet.rowData) {
-      ws['!rows'] = Object.values(sheet.rowData || {}).map((row: any) => ({
+      ws['!rows'] = Object.values(sheet.rowData || {}).map((row: RowInfo) => ({
         hpx: row?.h || 25,
         hidden: row?.hd === 1,
       }));
@@ -423,12 +431,12 @@ export function csvToWorkbookData(csvText: string, fileName: string): IWorkbookD
     const rowCount = Math.max(maxRow + 1, 100);
     const colCount = Math.max(maxCol + 1, 26);
 
-    const rowData: any[] = [];
+    const rowData: RowInfo[] = [];
     for (let r = 0; r < rowCount; r++) {
       rowData.push({ h: 25, hd: BooleanNumber.FALSE });
     }
 
-    const columnData: any[] = [];
+    const columnData: ColumnInfo[] = [];
     for (let c = 0; c < colCount; c++) {
       columnData.push({ w: 100, hd: BooleanNumber.FALSE });
     }
@@ -470,7 +478,7 @@ export function workbookDataToCsv(data: IWorkbookData, sheetName?: string): stri
   const sheet = data.sheets?.[targetSheetId];
   if (!sheet) return '';
 
-  const ws: Record<string, any> = {};
+  const ws: XLSX.WorkSheet = {};
   const cellData = sheet.cellData || {};
   const rowCount = sheet.rowCount || 100;
   const colCount = sheet.columnCount || 26;

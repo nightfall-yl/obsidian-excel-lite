@@ -57,7 +57,6 @@ export default class ExcelPlugin extends Plugin {
       this.addCommand({
         id: 'create-sheet',
         name: t('CREATE_SHEET'),
-        hotkeys: [],
         callback: () => {
           void this.createAndOpenSheet(this.settings.folder);
         },
@@ -126,7 +125,7 @@ export default class ExcelPlugin extends Plugin {
     this.register(
       around(WorkspaceLeaf.prototype, {
         setViewState(next) {
-          return function (state: ViewState, ...rest: any[]) {
+          return function (state: ViewState, ...rest: unknown[]) {
             if (
               state.type === 'markdown'
               && state.state?.file

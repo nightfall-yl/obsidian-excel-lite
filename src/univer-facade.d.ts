@@ -19,13 +19,11 @@ declare module '@univerjs/core/facade' {
     };
     createWorkbook(data: IWorkbookData): FWorkbook;
     getActiveWorkbook(): FWorkbook | null;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Univer facade event callback params are untyped upstream
-    addEvent(event: string, callback: (res: any) => void): { dispose: () => void };
+    addEvent(event: string, callback: (res: unknown) => void): { dispose: () => void };
     disposeUnit(id: string): void;
     dispose(): void;
     setPermissionDialogVisible(visible: boolean): void;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Univer facade command params are dynamic
-    executeCommand(id: string, params: any): boolean;
+    executeCommand(id: string, params: unknown): boolean;
   }
 
   export interface FWorkbook {
@@ -63,14 +61,18 @@ declare module '@univerjs/core/facade' {
 }
 
 declare module '@univerjs/core' {
-  interface Univer {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Univer internal injector return type is not exposed
-    __getInjector(): any;
-  }
+  // Workaround: @univerjs/core's exports field doesn't properly resolve
+  // re-exports under 'bundler' moduleResolution. These re-exports from
+  // internal paths make the types available.
+  export {
+    IWorkbookData, ICellData, IRange, IWorksheetData, IRowData, IColumnData, IFreeze,
+    BooleanNumber, CellValueType, LocaleType, IStyleData, LifecycleStages,
+    CommandType, ICommand, ICommandService, IAuthzIoService, LocaleService,
+    LogLevel, UserManagerService, merge, Univer,
+  } from '@univer/re-export';
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Univer locale module shape is unknown
-type LocaleRecord = Record<string, any>;
+type LocaleRecord = Record<string, unknown>;
 
 declare module '@univerjs/design/lib/es/locale/zh-CN' {
   const value: LocaleRecord;

@@ -21,7 +21,7 @@ import type { App, TFile } from 'obsidian';
 type OnImportCallback = (data: IWorkbookData) => void;
 
 export function setupImportExport(
-  injector: any,
+  injector: unknown,
   univerAPI: FUniver,
   onImport: OnImportCallback,
 ): () => void {

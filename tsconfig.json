@@ -22,7 +22,8 @@
       "ES2021.String"
     ],
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["src/*"],
+      "@univer/re-export": ["./src/univer-types.d.ts"]
     }
   },
   "include": [

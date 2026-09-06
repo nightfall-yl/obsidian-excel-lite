@@ -132,7 +132,7 @@ export class SheetView extends TextFileView {
 
     univerAPI.createWorkbook(workbookData);
 
-    univerAPI.addEvent(univerAPI.Event.LifeCycleChanged, (res: any) => {
+    univerAPI.addEvent(univerAPI.Event.LifeCycleChanged, (res: unknown) => {
       if (res.stage === LifecycleStages.Rendered) {
         if (!isMobile) {
           this.setupDataSync();
@@ -196,7 +196,7 @@ export class SheetView extends TextFileView {
   private setupDataSync(): void {
     if (!this.univerAPI) return;
 
-    this.univerAPI.addEvent(this.univerAPI.Event.CommandExecuted, (res: any) => {
+    this.univerAPI.addEvent(this.univerAPI.Event.CommandExecuted, (res: unknown) => {
       if (res.type !== CommandType.MUTATION || res.options?.fromCollab || res.options?.onlyLocal) {
         return;
       }

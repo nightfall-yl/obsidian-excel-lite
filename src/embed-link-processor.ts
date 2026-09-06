@@ -6,6 +6,18 @@ import { parseSheetFile } from './data-utils';
 import { SHEET_FRONTMATTER_KEYS } from './constants';
 import { createUniverInstance } from './setup-univer';
 
+interface EmbedPlugin extends Plugin {
+  isSheetFile(file: TFile): boolean;
+  loadData(): Promise<unknown>;
+}
+
+interface ProcessorContext {
+  sourcePath: string;
+  remainingNestLevel: number;
+  containerEl: HTMLElement;
+  [key: string]: unknown;
+}
+
 interface EmbedLinkParseResult {
   filePath: string;
   fileName: string;
@@ -84,11 +96,18 @@ function cellRefToIndex(ref: string): { row: number; col: number } | null {
   return { row: parseInt(match[2]) - 1, col: col - 1 };
 }
 
-function getCellValue(cell: any): string {
+function getCellValue(cell: Record<string, unknown>): string {
   if (!cell) return '';
-  if (cell.v !== undefined && cell.v !== null) return String(cell.v);
-  if (cell.p?.body?.dataStream) {
-    const stream: string = cell.p.body.dataStream;
+  const v = cell.v;
+  if (v != null) {
+    if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') {
+      return String(v);
+    }
+    return '';
+  }
+  const p = cell.p as { body?: { dataStream?: string } } | undefined;
+  if (p?.body?.dataStream) {
+    const stream: string = p.body.dataStream;
     return stream.replace(/\r?\n$/, '').replace(/\n/g, ' ');
   }
   return '';
@@ -178,8 +197,8 @@ function createUniverEmbedElement(
   workbookData: IWorkbookData,
   height: number,
   showFooter: boolean,
-  plugin: any,
-  ctx: any,
+  plugin: EmbedPlugin,
+  ctx: ProcessorContext,
 ): HTMLDivElement {
   const embedEl = activeWindow.createDiv();
   embedEl.className = 'excel-embed-univer';
@@ -224,8 +243,8 @@ function createUniverEmbedElement(
     };
 
     const workbook = univerAPI.createWorkbook(workbookData);
-    lifecycleDisposable = univerAPI.addEvent(univerAPI.Event.LifeCycleChanged, (event: any) => {
-      if (event.stage !== LifecycleStages.Rendered) return;
+    lifecycleDisposable = univerAPI.addEvent(univerAPI.Event.LifeCycleChanged, (event: unknown) => {
+      if ((event as { stage: number }).stage !== LifecycleStages.Rendered) return;
 
       try {
         const permission = workbook?.getWorkbookPermission?.();
@@ -246,12 +265,12 @@ function createUniverEmbedElement(
   return embedEl;
 }
 
-export function registerEmbedLinkProcessor(plugin: any): void {
-  plugin.registerMarkdownCodeBlockProcessor('sheet-embed', async (source: any, el: any) => {
+export function registerEmbedLinkProcessor(plugin: EmbedPlugin): void {
+  plugin.registerMarkdownCodeBlockProcessor('sheet-embed', async (source: string, el: HTMLElement) => {
     el.createEl('p', { text: 'Sheet embed block', cls: 'excel-embed-placeholder' });
   });
 
-  const processor = async (el: HTMLElement, ctx: any) => {
+  const processor = async (el: HTMLElement, ctx: Record<string, unknown>) => {
     const internalEmbeds = el.querySelectorAll('.internal-embed');
 
     if (internalEmbeds.length === 0) {
@@ -265,7 +284,7 @@ export function registerEmbedLinkProcessor(plugin: any): void {
   plugin.registerMarkdownPostProcessor(processor);
 }
 
-async function processEditMode(el: HTMLElement, ctx: any, plugin: any): Promise<void> {
+async function processEditMode(el: HTMLElement, ctx: ProcessorContext, plugin: EmbedPlugin): Promise<void> {
   const file = plugin.app.vault.getAbstractFileByPath(ctx.sourcePath);
   if (!(file instanceof TFile)) return;
   if (!plugin.isSheetFile(file)) return;
@@ -348,7 +367,7 @@ async function processEditMode(el: HTMLElement, ctx: any, plugin: any): Promise<
   }
 }
 
-async function processReadingMode(internalEmbeds: NodeListOf<Element>, ctx: any, plugin: any): Promise<void> {
+async function processReadingMode(internalEmbeds: NodeListOf<Element>, ctx: ProcessorContext, plugin: EmbedPlugin): Promise<void> {
   for (const embedEl of Array.from(internalEmbeds)) {
     const src = embedEl.getAttribute('src') || '';
     const alt = embedEl.getAttribute('alt') || '';
@@ -374,8 +393,8 @@ async function createEmbedLinkDiv(
   alt: string,
   file: TFile,
   data: string,
-  plugin: any,
-  ctx: any,
+  plugin: Record<string, unknown>,
+  ctx: ProcessorContext,
 ): Promise<HTMLDivElement> {
   const workbookData = parseSheetFile(data, file.path);
   if (!workbookData) {
@@ -502,7 +521,7 @@ function resolveSheetFile(src: string, plugin: Plugin, sourcePath = ''): TFile |
   return null;
 }
 
-function findSheet(workbookData: any, sheetName: string): any {
+function findSheet(workbookData: Record<string, unknown>, sheetName: string): Record<string, unknown> | null {
   if (!workbookData.sheets) return null;
   if (!sheetName) {
     const firstSheetId = workbookData.sheetOrder?.[0];

@@ -204,7 +204,7 @@ export function createUniverInstance(
     const cmdInjector = univer.__getInjector();
     const commandService = cmdInjector.get(ICommandService);
     const localeService = cmdInjector.get(LocaleService);
-    commandService.onCommandExecuted((commandInfo: any) => {
+    commandService.onCommandExecuted((commandInfo: unknown) => {
       if (commandInfo.id === 'sheet.command.insert-sheet') {
         const correctPrefix = localeService.t('sheets.tabs.sheet');
 
