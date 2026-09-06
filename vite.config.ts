@@ -60,6 +60,14 @@ function copyBuildOutput() {
         let builtCss = await readFile(join(rootDir, 'styles.css'), 'utf-8');
         const importantCount = (builtCss.match(/!important/g) || []).length;
         builtCss = builtCss.replace(/\s*!important/g, '');
+        // Restore dark-variant specificity after stripping `!important`.
+        // Tailwind gates `dark:` utilities via `:where(.univer-dark,.univer-dark *)`,
+        // which contributes ZERO specificity. Without `!important`, a paired base
+        // utility (e.g. `univer-bg-white`) ties at (0,1,0) and wins by source order,
+        // leaving menu/status/formula bars white in dark mode. Rewriting `:where`→`:is`
+        // raises the dark variant to (0,2,0) so it wins — no `!important` needed and
+        // the rules stay inert outside a `.univer-dark` ancestor.
+        builtCss = builtCss.replace(/:where\(\.univer-dark,\.univer-dark \*\)/g, ':is(.univer-dark,.univer-dark *)');
         // Deduplicate CSS properties within each selector block (Tailwind fallback patterns)
         for (let prev = ''; builtCss !== prev;) {
           prev = builtCss;
