@@ -40,6 +40,8 @@ declare module '@univerjs/core/facade' {
   export interface FWorksheet {
     getSheetId(): string;
     getName(): string;
+    getSheetName(): string;
+    setName(name: string): void;
     getSheet(): { id: string; name: string };
     getSelection(): FSelection | null;
   }
@@ -67,9 +69,11 @@ declare module '@univerjs/core' {
   export {
     IWorkbookData, ICellData, IRange, IWorksheetData, IRowData, IColumnData, IFreeze,
     BooleanNumber, CellValueType, LocaleType, IStyleData, LifecycleStages,
-    CommandType, ICommand, ICommandService, IAuthzIoService, LocaleService,
+    CommandType, ICommand, ICommandService, IAuthzIoService, Injector, LocaleService,
+    HorizontalAlign, VerticalAlign, WrapStrategy,
     LogLevel, UserManagerService, merge, Univer,
   } from '@univer/re-export';
+  export type { ILanguagePack } from '@univer/re-export';
 }
 
 type LocaleRecord = Record<string, unknown>;

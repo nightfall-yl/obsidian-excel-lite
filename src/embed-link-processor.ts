@@ -1,7 +1,7 @@
-import type { IWorkbookData } from '@univerjs/core';
-import { LifecycleStages } from '@univerjs/core';
+import type { IWorkbookData, IWorksheetData, ICellData } from '@univerjs/core';
+import { BooleanNumber, LifecycleStages } from '@univerjs/core';
 import type { Plugin } from 'obsidian';
-import { MarkdownRenderChild, Platform, TFile } from 'obsidian';
+import { MarkdownPostProcessorContext, MarkdownRenderChild, Platform, TFile } from 'obsidian';
 import { parseSheetFile } from './data-utils';
 import { SHEET_FRONTMATTER_KEYS } from './constants';
 import { createUniverInstance } from './setup-univer';
@@ -9,12 +9,18 @@ import { createUniverInstance } from './setup-univer';
 interface EmbedPlugin extends Plugin {
   isSheetFile(file: TFile): boolean;
   loadData(): Promise<unknown>;
+  settings: {
+    embedTableHeight: number;
+    showJumpToOriginal: boolean;
+    showEmbedBottomContent: boolean;
+  };
 }
 
 interface ProcessorContext {
   sourcePath: string;
   remainingNestLevel: number;
   containerEl: HTMLElement;
+  addChild?: (child: MarkdownRenderChild) => unknown;
   [key: string]: unknown;
 }
 
@@ -96,7 +102,7 @@ function cellRefToIndex(ref: string): { row: number; col: number } | null {
   return { row: parseInt(match[2]) - 1, col: col - 1 };
 }
 
-function getCellValue(cell: Record<string, unknown>): string {
+function getCellValue(cell: ICellData | undefined): string {
   if (!cell) return '';
   const v = cell.v;
   if (v != null) {
@@ -114,7 +120,7 @@ function getCellValue(cell: Record<string, unknown>): string {
 }
 
 function renderCellDataAsTable(
-  cellData: Record<string, Record<string, any>>,
+  cellData: IWorksheetData['cellData'],
   startRow: number,
   startCol: number,
   endRow: number,
@@ -164,21 +170,21 @@ function getRangeWorkbookData(
   sheet.rowCount = endRow + 1;
   sheet.columnCount = endCol + 1;
 
-  const rowData = sheet.rowData || {};
+  const rowData: IWorksheetData['rowData'] = sheet.rowData || {};
   for (let row = 0; row < startRow; row++) {
     rowData[row] = {
       ...(rowData[row] || {}),
-      hd: 1,
+      hd: BooleanNumber.TRUE,
       h: rowData[row]?.h || sheet.defaultRowHeight || 25,
     };
   }
   sheet.rowData = rowData;
 
-  const columnData = sheet.columnData || {};
+  const columnData: IWorksheetData['columnData'] = sheet.columnData || {};
   for (let col = 0; col < startCol; col++) {
     columnData[col] = {
       ...(columnData[col] || {}),
-      hd: 1,
+      hd: BooleanNumber.TRUE,
       w: columnData[col]?.w || sheet.defaultColumnWidth || 100,
     };
   }
@@ -244,7 +250,7 @@ function createUniverEmbedElement(
 
     const workbook = univerAPI.createWorkbook(workbookData);
     lifecycleDisposable = univerAPI.addEvent(univerAPI.Event.LifeCycleChanged, (event: unknown) => {
-      if ((event as { stage: number }).stage !== LifecycleStages.Rendered) return;
+      if ((event as { stage: LifecycleStages }).stage !== LifecycleStages.Rendered) return;
 
       try {
         const permission = workbook?.getWorkbookPermission?.();
@@ -270,15 +276,26 @@ export function registerEmbedLinkProcessor(plugin: EmbedPlugin): void {
     el.createEl('p', { text: 'Sheet embed block', cls: 'excel-embed-placeholder' });
   });
 
-  const processor = async (el: HTMLElement, ctx: Record<string, unknown>) => {
+  const processor = async (el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
     const internalEmbeds = el.querySelectorAll('.internal-embed');
 
+    // Obsidian's runtime context also exposes containerEl / remainingNestLevel even
+    // though they are not fully reflected in the shipped typings. Bridge them into the
+    // internal ProcessorContext that downstream helpers rely on.
+    const rawCtx = ctx as unknown as Record<string, unknown>;
+    const processorCtx: ProcessorContext = {
+      ...rawCtx,
+      sourcePath: ctx.sourcePath,
+      containerEl: rawCtx.containerEl as HTMLElement,
+      remainingNestLevel: rawCtx.remainingNestLevel as number,
+    };
+
     if (internalEmbeds.length === 0) {
-      await processEditMode(el, ctx, plugin);
+      await processEditMode(el, processorCtx, plugin);
       return;
     }
 
-    await processReadingMode(internalEmbeds, ctx, plugin);
+    await processReadingMode(internalEmbeds, processorCtx, plugin);
   };
 
   plugin.registerMarkdownPostProcessor(processor);
@@ -393,7 +410,7 @@ async function createEmbedLinkDiv(
   alt: string,
   file: TFile,
   data: string,
-  plugin: Record<string, unknown>,
+  plugin: EmbedPlugin,
   ctx: ProcessorContext,
 ): Promise<HTMLDivElement> {
   const workbookData = parseSheetFile(data, file.path);
@@ -427,7 +444,7 @@ async function createEmbedLinkDiv(
     fileLabel.textContent = file.basename;
     fileLabel.addEventListener('click', (event: MouseEvent) => {
       event.stopPropagation();
-      plugin.app.workspace.openLinkText(file.path, '', 'split');
+      void plugin.app.workspace.openLinkText(file.path, '', 'split');
     });
   }
 
@@ -521,19 +538,20 @@ function resolveSheetFile(src: string, plugin: Plugin, sourcePath = ''): TFile |
   return null;
 }
 
-function findSheet(workbookData: Record<string, unknown>, sheetName: string): Record<string, unknown> | null {
+function findSheet(workbookData: IWorkbookData, sheetName: string): IWorksheetData | null {
   if (!workbookData.sheets) return null;
   if (!sheetName) {
     const firstSheetId = workbookData.sheetOrder?.[0];
-    return firstSheetId ? workbookData.sheets[firstSheetId] : null;
+    return firstSheetId ? (workbookData.sheets[firstSheetId] as IWorksheetData | undefined) ?? null : null;
   }
 
   for (const sheetId of Object.keys(workbookData.sheets)) {
-    if (workbookData.sheets[sheetId].name === sheetName) {
-      return workbookData.sheets[sheetId];
+    const sheet = workbookData.sheets[sheetId];
+    if (sheet.name === sheetName) {
+      return sheet as IWorksheetData;
     }
   }
 
   const firstSheetId = workbookData.sheetOrder?.[0];
-  return firstSheetId ? workbookData.sheets[firstSheetId] : null;
+  return firstSheetId ? (workbookData.sheets[firstSheetId] as IWorksheetData | undefined) ?? null : null;
 }

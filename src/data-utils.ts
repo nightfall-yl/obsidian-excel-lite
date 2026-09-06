@@ -14,7 +14,7 @@ export function parseSheetFile(content: string, filePath?: string): IWorkbookDat
   if (!blockMatch) return undefined;
 
   try {
-    const data = JSON.parse(blockMatch[1]);
+    const data = JSON.parse(blockMatch[1]) as IWorkbookData;
     if (data && typeof data === 'object' && filePath) {
       data.name = filePath;
     }

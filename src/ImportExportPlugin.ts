@@ -20,14 +20,20 @@ import type { App, TFile } from 'obsidian';
 
 type OnImportCallback = (data: IWorkbookData) => void;
 
+// Injector cannot be referenced by name (TS2709: @wendellhu/redi resolves it as a
+// namespace under 'bundler' resolution), and typescript-eslint resolves it to an
+// `error` type. Give it a minimal structural type so the `.get()` receiver and the
+// resolved services stay concrete; services are picked with explicit type args.
+type UniverInjector = { get: <T>(token: unknown) => T };
+
 export function setupImportExport(
-  injector: unknown,
+  injector: UniverInjector,
   univerAPI: FUniver,
   onImport: OnImportCallback,
 ): () => void {
-  const commandService = injector.get(ICommandService);
-  const menuManagerService = injector.get(IMenuManagerService);
-  const componentManager = injector.get(ComponentManager);
+  const commandService = injector.get<ICommandService>(ICommandService);
+  const menuManagerService = injector.get<IMenuManagerService>(IMenuManagerService);
+  const componentManager = injector.get<ComponentManager>(ComponentManager);
 
   componentManager.register('FolderOpenIcon', FolderIcon);
   componentManager.register('ExportXlsxIcon', ExportIcon);

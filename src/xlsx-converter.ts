@@ -1,5 +1,5 @@
 import type { IWorkbookData, ICellData, IRange, IStyleData } from '@univerjs/core';
-import { BooleanNumber, CellValueType, LocaleType } from '@univerjs/core';
+import { BooleanNumber, CellValueType, LocaleType, HorizontalAlign, VerticalAlign, WrapStrategy } from '@univerjs/core';
 import * as XLSX from 'xlsx';
 
 const INDEXED_COLORS = [
@@ -45,6 +45,35 @@ interface ColumnInfo { w: number; hd: BooleanNumber; }
 type XLSXFont = { color?: { rgb?: string; indexed?: number } };
 type XLSXFill = { patternType?: string; fgColor?: { rgb?: string; indexed?: number }; bgColor?: { rgb?: string; indexed?: number } };
 type XLSXCellXf = { fontId?: number; fontid?: number; fillId?: number; fillid?: number };
+
+// XLSX's CellObject types `s` (cell style) as `any`, which leaks `any` through the
+// whole cell row. Introduce a concrete shape for the fields we read so the converter
+// stays type-safe without relying on the library's `any` member.
+interface XLSXCellData {
+  t?: string;
+  v?: string | number | boolean | Date | null;
+  f?: string;
+  z?: string;
+  s?: XLSXCellStyle;
+}
+interface XLSXCellStyle {
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  strike?: boolean;
+  sz?: number;
+  name?: string;
+  color?: { rgb?: string; indexed?: number };
+  font?: { bold?: boolean; italic?: boolean; underline?: boolean; strike?: boolean; sz?: number; name?: string; color?: { rgb?: string; indexed?: number } };
+  fgColor?: { rgb?: string; indexed?: number };
+  bgColor?: { rgb?: string; indexed?: number };
+  patternType?: string;
+  fill?: { fgColor?: { rgb?: string; indexed?: number }; bgColor?: { rgb?: string; indexed?: number } };
+  alignment?: { horizontal?: string; vertical?: string; wrapText?: boolean };
+  horizontal?: string;
+  vertical?: string;
+  wrapText?: boolean;
+}
 
 function createSheetData(
   id: string,
@@ -159,7 +188,7 @@ export function xlsxToWorkbookData(buffer: ArrayBuffer, fileName: string): IWork
 
     for (const cellRef of Object.keys(ws)) {
       if (cellRef.startsWith('!')) continue;
-      const cell = ws[cellRef];
+      const cell = (ws[cellRef] as XLSXCellData);
       const addr = XLSX.utils.decode_cell(cellRef);
       const row = addr.r;
       const col = addr.c;
@@ -174,7 +203,7 @@ export function xlsxToWorkbookData(buffer: ArrayBuffer, fileName: string): IWork
       const cellValue: ICellData = {};
 
       if (cell.t === 'n') {
-        cellValue.v = cell.v;
+        cellValue.v = cell.v as number;
         cellValue.t = CellValueType.NUMBER;
       } else if (cell.t === 'b') {
         cellValue.v = cell.v ? 'TRUE' : 'FALSE';
@@ -183,7 +212,7 @@ export function xlsxToWorkbookData(buffer: ArrayBuffer, fileName: string): IWork
         cellValue.v = cell.v instanceof Date ? cell.v.toISOString() : String(cell.v);
         cellValue.t = CellValueType.STRING;
       } else if (cell.t === 's') {
-        cellValue.v = cell.v;
+        cellValue.v = cell.v as string;
         cellValue.t = CellValueType.STRING;
       } else {
         cellValue.v = cell.v != null ? String(cell.v) : '';
@@ -310,8 +339,10 @@ export function workbookDataToXlsx(data: IWorkbookData): ArrayBuffer {
         } else if (cell.t === CellValueType.NUMBER || typeof cell.v === 'number') {
           xlsxCell.v = cell.v as number;
           xlsxCell.t = 'n';
-        } else if (cell.t === CellValueType.BOOLEAN || cell.v === true || cell.v === false) {
-          xlsxCell.v = cell.v;
+        } else if (cell.t === CellValueType.BOOLEAN || typeof cell.v === 'boolean') {
+          if (typeof cell.v === 'boolean') {
+            xlsxCell.v = cell.v;
+          }
           xlsxCell.t = 'b';
         } else {
           xlsxCell.v = cell.v != null ? String(cell.v) : '';
@@ -345,11 +376,11 @@ export function workbookDataToXlsx(data: IWorkbookData): ArrayBuffer {
             }
 
             const alignment: Record<string, unknown> = {};
-            if (styleData.ht === 2) alignment.horizontal = 'center';
-            else if (styleData.ht === 3) alignment.horizontal = 'right';
-            if (styleData.vt === 2) alignment.vertical = 'center';
-            else if (styleData.vt === 3) alignment.vertical = 'bottom';
-            if (styleData.tb === 2) alignment.wrapText = true;
+            if (styleData.ht === HorizontalAlign.CENTER) alignment.horizontal = 'center';
+            else if (styleData.ht === HorizontalAlign.RIGHT) alignment.horizontal = 'right';
+            if (styleData.vt === VerticalAlign.MIDDLE) alignment.vertical = 'center';
+            else if (styleData.vt === VerticalAlign.BOTTOM) alignment.vertical = 'bottom';
+            if (styleData.tb === WrapStrategy.CLIP) alignment.wrapText = true;
 
             if (!xlsxCell.z && styleData.n?.pattern) {
               xlsxCell.z = styleData.n.pattern;
@@ -377,14 +408,14 @@ export function workbookDataToXlsx(data: IWorkbookData): ArrayBuffer {
     if (sheet.columnData) {
       ws['!cols'] = Object.values(sheet.columnData || {}).map((col: ColumnInfo) => ({
         wpx: col?.w || 100,
-        hidden: col?.hd === 1,
+        hidden: col?.hd === BooleanNumber.TRUE,
       }));
     }
 
     if (sheet.rowData) {
       ws['!rows'] = Object.values(sheet.rowData || {}).map((row: RowInfo) => ({
         hpx: row?.h || 25,
-        hidden: row?.hd === 1,
+        hidden: row?.hd === BooleanNumber.TRUE,
       }));
     }
 
@@ -412,7 +443,7 @@ export function csvToWorkbookData(csvText: string, fileName: string): IWorkbookD
 
     for (const cellRef of Object.keys(ws)) {
       if (cellRef.startsWith('!')) continue;
-      const cell = ws[cellRef];
+      const cell = (ws[cellRef] as XLSXCellData);
       const addr = XLSX.utils.decode_cell(cellRef);
       const row = addr.r;
       const col = addr.c;

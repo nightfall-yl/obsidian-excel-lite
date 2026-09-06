@@ -112,7 +112,9 @@ export default class ExcelPlugin extends Plugin {
   }
 
   async loadSettings(): Promise<void> {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    // this.loadData() is Promise<any> from Obsidian API; narrow it to safe partials.
+    const stored = (await this.loadData()) as Partial<ExcelSettings> | undefined;
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, stored ?? {});
   }
 
   async saveSettings(): Promise<void> {
@@ -141,11 +143,11 @@ export default class ExcelPlugin extends Plugin {
                   ...state,
                   type: VIEW_TYPE_SHEET,
                 };
-                return next.apply(this, [newState, ...rest]);
+                return next.apply(this, [newState, ...rest]) as ReturnType<typeof next>;
               }
             }
 
-            return next.apply(this, [state, ...rest]);
+            return next.apply(this, [state, ...rest]) as ReturnType<typeof next>;
           };
         },
       }),

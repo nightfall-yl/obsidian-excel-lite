@@ -78,8 +78,9 @@ function copyBuildOutput() {
           });
         }
         // Strip unsupported browser features for Obsidian 1.9.12
-        // columns:... — multicolumn partially supported (avoid matching grid-template-columns)
-        builtCss = builtCss.replace(/(^|[;{])\s*columns:[^;{}]+/g, '$1');
+        // columns:/column-gap:... — multicolumn partially supported (keep grid-template-columns:)
+        // text-decoration-line:... — non-standard, not supported
+        builtCss = builtCss.replace(/(^|[;{])\s*(columns|column-gap|text-decoration-line):[^;{}]+/g, '$1');
         // extended-system-fonts: ui-sans-serif / ui-monospace — not supported
         builtCss = builtCss.replace(/\bui-sans-serif,\s*/g, '');
         builtCss = builtCss.replace(/\bui-monospace,\s*/g, '');

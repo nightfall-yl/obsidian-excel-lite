@@ -132,7 +132,7 @@ export class SheetView extends TextFileView {
 
     univerAPI.createWorkbook(workbookData);
 
-    univerAPI.addEvent(univerAPI.Event.LifeCycleChanged, (res: unknown) => {
+    univerAPI.addEvent(univerAPI.Event.LifeCycleChanged, (res: { stage: unknown }) => {
       if (res.stage === LifecycleStages.Rendered) {
         if (!isMobile) {
           this.setupDataSync();
@@ -196,7 +196,11 @@ export class SheetView extends TextFileView {
   private setupDataSync(): void {
     if (!this.univerAPI) return;
 
-    this.univerAPI.addEvent(this.univerAPI.Event.CommandExecuted, (res: unknown) => {
+    this.univerAPI.addEvent(this.univerAPI.Event.CommandExecuted, (res: {
+      type?: CommandType;
+      id?: string;
+      options?: { fromCollab?: boolean; onlyLocal?: boolean };
+    }) => {
       if (res.type !== CommandType.MUTATION || res.options?.fromCollab || res.options?.onlyLocal) {
         return;
       }
@@ -213,7 +217,9 @@ export class SheetView extends TextFileView {
   private setupImportExportFeature(): void {
     if (!this.univer || !this.univerAPI) return;
 
-    const injector = this.univer.__getInjector();
+    const injector = this.univer.__getInjector() as unknown as {
+      get: <T>(token: unknown) => T;
+    };
     if (!injector) return;
 
     try {

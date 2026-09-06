@@ -13,6 +13,7 @@ import '@univerjs/sheets-hyper-link-ui/lib/index.css';
 import '@univerjs/sheets-note-ui/lib/index.css';
 
 import { IAuthzIoService, ICommandService, LocaleService, LocaleType, LogLevel, merge, Univer, UserManagerService } from '@univerjs/core';
+import type { ILanguagePack } from '@univerjs/core';
 import { FUniver } from '@univerjs/core/facade';
 import { defaultTheme } from '@univerjs/themes';
 import { MockAuthzService } from './MockAuthzService';
@@ -87,7 +88,11 @@ import sheetsThreadCommentUiEnUS from '@univerjs/sheets-thread-comment-ui/lib/es
 import sheetsHyperLinkUiEnUS from '@univerjs/sheets-hyper-link-ui/lib/es/locale/en-US';
 import sheetsNoteUiEnUS from '@univerjs/sheets-note-ui/lib/es/locale/en-US';
 
-const zhCNLocale = merge(
+// lodash's `merge` resolves to `any` through the re-export bridge; alias it with a
+// concrete signature so the locale dictionaries type-check safely.
+const mergeLocalDicts = merge as (...args: unknown[]) => ILanguagePack;
+
+const zhCNLocale = mergeLocalDicts(
   {},
   designZhCN,
   docsUiZhCN,
@@ -113,7 +118,7 @@ const zhCNLocale = merge(
   },
 );
 
-const enUSLocale = merge(
+const enUSLocale = mergeLocalDicts(
   {},
   designEnUS,
   docsUiEnUS,
@@ -180,8 +185,10 @@ export function createUniverInstance(
     ],
   });
 
-  const injector = univer.__getInjector();
-  const userManagerService = injector.get(UserManagerService);
+  const injector = univer.__getInjector() as unknown as {
+    get: <T>(token: unknown) => T;
+  };
+  const userManagerService = injector.get<UserManagerService>(UserManagerService);
   userManagerService.setCurrentUser({
     userID: 'obsidian-user',
     name: 'Obsidian User',
@@ -201,10 +208,12 @@ export function createUniverInstance(
 
   // Fix: rename new sheet to match locale when InsertSheetCommand executes
   try {
-    const cmdInjector = univer.__getInjector();
-    const commandService = cmdInjector.get(ICommandService);
-    const localeService = cmdInjector.get(LocaleService);
-    commandService.onCommandExecuted((commandInfo: unknown) => {
+    const cmdInjector = univer.__getInjector() as unknown as {
+      get: <T>(token: unknown) => T;
+    };
+    const commandService = cmdInjector.get<ICommandService>(ICommandService);
+    const localeService = cmdInjector.get<LocaleService>(LocaleService);
+    commandService.onCommandExecuted((commandInfo: { id?: unknown }) => {
       if (commandInfo.id === 'sheet.command.insert-sheet') {
         const correctPrefix = localeService.t('sheets.tabs.sheet');
 
