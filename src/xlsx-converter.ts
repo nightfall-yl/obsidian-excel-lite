@@ -78,7 +78,14 @@ export function xlsxToWorkbookData(buffer: ArrayBuffer, fileName: string): IWork
   const sheetOrder: string[] = [];
   const styles: Record<string, IStyleData> = {};
 
-  const wbStyles = (workbook as any).Styles;
+  interface XLSXWorkbookInternal {
+    Styles?: {
+      Fonts?: Array<{ color?: { rgb?: string; indexed?: number } }>;
+      Fills?: Array<{ patternType?: string; fgColor?: { rgb?: string; indexed?: number }; bgColor?: { rgb?: string; indexed?: number } }>;
+      CellXf?: Array<{ fontId?: number; fontid?: number; fillId?: number; fillid?: number }>;
+    };
+  }
+  const wbStyles = (workbook as unknown as XLSXWorkbookInternal).Styles;
   const fonts: any[] = wbStyles?.Fonts || [];
   const fills: any[] = wbStyles?.Fills || [];
   const cellXfs: any[] = wbStyles?.CellXf || [];
@@ -180,7 +187,7 @@ export function xlsxToWorkbookData(buffer: ArrayBuffer, fileName: string): IWork
       }
 
       if (cell.z) {
-        (cellValue as any).n = { pattern: String(cell.z) };
+        (cellValue as ICellData & { n?: { pattern: string } }).n = { pattern: String(cell.z) };
       }
 
       if (cell.s) {
@@ -303,12 +310,12 @@ export function workbookDataToXlsx(data: IWorkbookData): ArrayBuffer {
           xlsxCell.t = 's';
         }
 
-        if ((cell as any).n?.pattern) {
-          xlsxCell.z = (cell as any).n.pattern;
+        if ((cell as ICellData & { n?: { pattern: string } }).n?.pattern) {
+          xlsxCell.z = (cell as ICellData & { n?: { pattern: string } }).n.pattern;
         }
 
         if (cell.s != null) {
-          const styleData = typeof cell.s === 'string' ? styles[cell.s as string] : cell.s;
+          const styleData = typeof cell.s === 'string' ? styles[cell.s] : cell.s;
           if (styleData) {
             const font: any = {};
             if (styleData.bl) font.bold = true;
@@ -359,14 +366,14 @@ export function workbookDataToXlsx(data: IWorkbookData): ArrayBuffer {
     }
 
     if (sheet.columnData) {
-      ws['!cols'] = (sheet.columnData as any[]).map((col: any) => ({
+      ws['!cols'] = Object.values(sheet.columnData || {}).map((col: any) => ({
         wpx: col?.w || 100,
         hidden: col?.hd === 1,
       }));
     }
 
     if (sheet.rowData) {
-      ws['!rows'] = (sheet.rowData as any[]).map((row: any) => ({
+      ws['!rows'] = Object.values(sheet.rowData || {}).map((row: any) => ({
         hpx: row?.h || 25,
         hidden: row?.hd === 1,
       }));
@@ -377,4 +384,112 @@ export function workbookDataToXlsx(data: IWorkbookData): ArrayBuffer {
 
   const buf = XLSX.write(wb, { type: 'array', bookType: 'xlsx', cellStyles: true });
   return buf;
+}
+
+export function csvToWorkbookData(csvText: string, fileName: string): IWorkbookData {
+  const workbook = XLSX.read(csvText, { type: 'string', raw: true });
+  const sheets: IWorkbookData['sheets'] = {};
+  const sheetOrder: string[] = [];
+
+  for (let i = 0; i < workbook.SheetNames.length; i++) {
+    const sheetName = workbook.SheetNames[i];
+    const ws = workbook.Sheets[sheetName];
+    const sheetId = `sheet-${i + 1}`;
+    sheetOrder.push(sheetId);
+
+    const cellData: Record<number, Record<number, ICellData>> = {};
+    let maxRow = 0;
+    let maxCol = 0;
+
+    for (const cellRef of Object.keys(ws)) {
+      if (cellRef.startsWith('!')) continue;
+      const cell = ws[cellRef];
+      const addr = XLSX.utils.decode_cell(cellRef);
+      const row = addr.r;
+      const col = addr.c;
+
+      if (row > maxRow) maxRow = row;
+      if (col > maxCol) maxCol = col;
+
+      if (!cellData[row]) cellData[row] = {};
+
+      cellData[row][col] = {
+        v: cell.v != null ? String(cell.v) : '',
+        t: CellValueType.STRING,
+      };
+    }
+
+    const rowCount = Math.max(maxRow + 1, 100);
+    const colCount = Math.max(maxCol + 1, 26);
+
+    const rowData: any[] = [];
+    for (let r = 0; r < rowCount; r++) {
+      rowData.push({ h: 25, hd: BooleanNumber.FALSE });
+    }
+
+    const columnData: any[] = [];
+    for (let c = 0; c < colCount; c++) {
+      columnData.push({ w: 100, hd: BooleanNumber.FALSE });
+    }
+
+    sheets[sheetId] = createSheetData(sheetId, sheetName, cellData, [], rowCount, colCount, rowData, columnData);
+  }
+
+  if (sheetOrder.length === 0) {
+    const defaultSheetId = 'sheet-1';
+    sheetOrder.push(defaultSheetId);
+    sheets[defaultSheetId] = createSheetData(defaultSheetId, 'Sheet1', {}, [], 100, 26, [], []);
+  }
+
+  return {
+    id: fileName,
+    name: fileName,
+    sheetOrder,
+    sheets,
+    styles: {},
+    appVersion: '0.20.0',
+    locale: LocaleType.ZH_CN,
+  };
+}
+
+export function workbookDataToCsv(data: IWorkbookData, sheetName?: string): string {
+  const sheetOrder = data.sheetOrder || Object.keys(data.sheets || {});
+  if (sheetOrder.length === 0) return '';
+
+  let targetSheetId = sheetOrder[0];
+  if (sheetName) {
+    for (const [id, sheet] of Object.entries(data.sheets || {})) {
+      if (sheet.name === sheetName) {
+        targetSheetId = id;
+        break;
+      }
+    }
+  }
+
+  const sheet = data.sheets?.[targetSheetId];
+  if (!sheet) return '';
+
+  const ws: Record<string, any> = {};
+  const cellData = sheet.cellData || {};
+  const rowCount = sheet.rowCount || 100;
+  const colCount = sheet.columnCount || 26;
+
+  for (let row = 0; row < rowCount; row++) {
+    const rowData = cellData[row];
+    if (!rowData) continue;
+    let hasData = false;
+    for (let col = 0; col < colCount; col++) {
+      const cell = rowData[col];
+      if (!cell) continue;
+      if (cell.v === '' || cell.v === null || cell.v === undefined) continue;
+      hasData = true;
+      const cellRef = XLSX.utils.encode_cell({ r: row, c: col });
+      ws[cellRef] = { t: 's', v: String(cell.v) };
+    }
+    if (!hasData) break;
+  }
+
+  const worksheet: XLSX.WorkSheet = ws;
+  const csvString = XLSX.utils.sheet_to_csv(worksheet, { blankrows: false });
+  return csvString;
 }

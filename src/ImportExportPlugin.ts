@@ -15,7 +15,7 @@ import { FolderIcon, ExportIcon, LinkIcon } from '@univerjs/icons';
 import { AddHyperLinkCommand } from '@univerjs/sheets-hyper-link';
 import type { FUniver } from '@univerjs/core/facade';
 import type { IWorkbookData } from '@univerjs/core';
-import { xlsxToWorkbookData, workbookDataToXlsx } from './xlsx-converter';
+import { xlsxToWorkbookData, workbookDataToXlsx, csvToWorkbookData, workbookDataToCsv } from './xlsx-converter';
 import type { App, TFile } from 'obsidian';
 
 type OnImportCallback = (data: IWorkbookData) => void;
@@ -35,11 +35,13 @@ export function setupImportExport(
 
   const importCommandId = 'excel.import-xlsx';
   const exportCommandId = 'excel.export-xlsx';
+  const importCsvCommandId = 'excel.import-csv';
+  const exportCsvCommandId = 'excel.export-csv';
   const addOutgoingLinkId = 'excel.add-outgoing-link';
   const addEmbedLinkId = 'excel.add-embed-link';
 
   const handleImport = () => {
-    const input = document.createElement('input');
+    const input = activeWindow.createEl('input');
     input.type = 'file';
     input.accept = '.xlsx,.xls';
     input.click();
@@ -70,15 +72,57 @@ export function setupImportExport(
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       });
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
+      const a = activeWindow.createEl('a');
       a.href = url;
       a.download = 'export.xlsx';
-      document.body.appendChild(a);
+      activeDocument.body.appendChild(a);
       a.click();
-      document.body.removeChild(a);
+      activeDocument.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (err) {
       console.error('Export xlsx error:', err);
+    }
+  };
+
+  const handleImportCsv = () => {
+    const input = activeWindow.createEl('input');
+    input.type = 'file';
+    input.accept = '.csv';
+    input.click();
+
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+
+      try {
+        const text = await file.text();
+        const workbookData = csvToWorkbookData(text, file.name.replace(/\.csv$/i, ''));
+        onImport(workbookData);
+      } catch (err) {
+        console.error('Import csv error:', err);
+      }
+    };
+  };
+
+  const handleExportCsv = () => {
+    const activeWorkbook = univerAPI.getActiveWorkbook();
+    if (!activeWorkbook) return;
+
+    try {
+      const workbookData = activeWorkbook.save();
+      const csvString = workbookDataToCsv(workbookData);
+
+      const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = activeWindow.createEl('a');
+      a.href = url;
+      a.download = 'export.csv';
+      activeDocument.body.appendChild(a);
+      a.click();
+      activeDocument.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Export csv error:', err);
     }
   };
 
@@ -96,6 +140,24 @@ export function setupImportExport(
     id: exportCommandId,
     handler: () => {
       handleExport();
+      return true;
+    },
+  };
+
+  const importCsvCommand: ICommand = {
+    type: CommandType.OPERATION,
+    id: importCsvCommandId,
+    handler: () => {
+      handleImportCsv();
+      return true;
+    },
+  };
+
+  const exportCsvCommand: ICommand = {
+    type: CommandType.OPERATION,
+    id: exportCsvCommandId,
+    handler: () => {
+      handleExportCsv();
       return true;
     },
   };
@@ -120,6 +182,8 @@ export function setupImportExport(
 
   commandService.registerCommand(importCommand);
   commandService.registerCommand(exportCommand);
+  commandService.registerCommand(importCsvCommand);
+  commandService.registerCommand(exportCsvCommand);
   commandService.registerCommand(addOutgoingLinkCommand);
   commandService.registerCommand(addEmbedLinkCommand);
 
@@ -141,6 +205,26 @@ export function setupImportExport(
           id: exportCommandId,
           title: 'exportXlsx',
           tooltip: 'exportXlsx',
+          icon: 'ExportXlsxIcon',
+          type: MenuItemType.BUTTON,
+        }),
+      },
+      [importCsvCommandId]: {
+        order: 12,
+        menuItemFactory: () => ({
+          id: importCsvCommandId,
+          title: 'importCsv',
+          tooltip: 'importCsv',
+          icon: 'FolderOpenIcon',
+          type: MenuItemType.BUTTON,
+        }),
+      },
+      [exportCsvCommandId]: {
+        order: 13,
+        menuItemFactory: () => ({
+          id: exportCsvCommandId,
+          title: 'exportCsv',
+          tooltip: 'exportCsv',
           icon: 'ExportXlsxIcon',
           type: MenuItemType.BUTTON,
         }),
@@ -178,11 +262,11 @@ export function setupImportExport(
     try {
       commandService.unregisterCommand(importCommandId);
       commandService.unregisterCommand(exportCommandId);
+      commandService.unregisterCommand(importCsvCommandId);
+      commandService.unregisterCommand(exportCsvCommandId);
       commandService.unregisterCommand(addOutgoingLinkId);
       commandService.unregisterCommand(addEmbedLinkId);
-    } catch (e) {
-      // ignore
-    }
+    } catch (e) { console.warn('[excel-lite] unregister commands failed:', e); }
   };
 }
 
@@ -196,7 +280,7 @@ function showOutgoingLinkModal(univerAPI: FUniver, app: App): void {
   const activeWorkbook = univerAPI.getActiveWorkbook();
   if (!activeWorkbook) return;
 
-  const activeSheet = (activeWorkbook as any).getActiveSheet();
+  const activeSheet = activeWorkbook.getActiveSheet();
   if (!activeSheet) return;
 
   const selection = activeSheet.getSelection();
@@ -204,56 +288,27 @@ function showOutgoingLinkModal(univerAPI: FUniver, app: App): void {
 
   const files = app.vault.getFiles();
 
-  const S = (el: HTMLElement, styles: Record<string, string>) => { Object.assign(el.style, styles); return el; };
+  const container = activeWindow.createDiv({ cls: 'excel-outgoing-link-modal-overlay' });
+  activeDocument.body.appendChild(container);
 
-  const container = S(document.createElement('div'), {
-    position: 'fixed', inset: '0',
-    background: 'rgba(0,0,0,0.3)',
-    zIndex: '99999',
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-  });
-  document.body.appendChild(container);
-
-  const modal = S(document.createElement('div'), {
-    background: 'var(--background-primary, #fff)',
-    border: '1px solid var(--background-modifier-border, #ddd)',
-    borderRadius: '12px',
-    width: '440px', maxWidth: '90vw',
-    maxHeight: '70vh',
-    display: 'flex', flexDirection: 'column',
-    boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
-    overflow: 'hidden',
-  });
+  const modal = activeWindow.createDiv({ cls: 'excel-outgoing-link-modal' });
   container.appendChild(modal);
 
-  const textSection = S(document.createElement('div'), { padding: '16px 20px 12px' });
-  const textLabel = textSection.createEl('label');
+  const textSection = activeWindow.createDiv({ cls: 'excel-outgoing-link-section' });
+  const textLabel = textSection.createEl('label', { cls: 'excel-outgoing-link-label' });
   textLabel.textContent = '文本';
-  S(textLabel, { display: 'block', fontSize: '14px', fontWeight: '500', color: 'var(--text-normal, #333)', marginBottom: '8px' });
 
-  const input = textSection.createEl('input');
+  const input = textSection.createEl('input', { cls: 'excel-outgoing-link-input' });
   input.type = 'text';
   input.placeholder = '输入文本';
-  S(input, {
-    width: '100%', padding: '10px 12px',
-    border: '1px solid var(--background-modifier-border, #ddd)', borderRadius: '6px',
-    background: 'var(--background-modifier-form-field, #fff)',
-    color: 'var(--text-normal, #333)', fontSize: '14px',
-    outline: 'none', boxSizing: 'border-box',
-  });
   modal.appendChild(textSection);
 
-  const linkSection = S(document.createElement('div'), { padding: '0 20px 14px' });
-  const linkLabel = linkSection.createEl('label');
+  const linkSection = activeWindow.createDiv({ cls: 'excel-outgoing-link-section' });
+  const linkLabel = linkSection.createEl('label', { cls: 'excel-outgoing-link-label' });
   linkLabel.textContent = '外链';
-  S(linkLabel, { display: 'block', fontSize: '14px', fontWeight: '500', color: 'var(--text-normal, #333)', marginBottom: '8px' });
 
-  const listWrap = S(document.createElement('div'), {
-    border: '1px solid var(--interactive-accent, #4caf50)', borderRadius: '6px',
-    maxHeight: '260px', overflowY: 'auto',
-    background: 'var(--background-primary, #fff)',
-  });
-  const listEl = document.createElement('div');
+  const listWrap = activeWindow.createDiv({ cls: 'excel-outgoing-link-list-wrap' });
+  const listEl = activeWindow.createDiv({ cls: 'excel-outgoing-link-list' });
   listWrap.appendChild(listEl);
   linkSection.appendChild(listWrap);
   modal.appendChild(linkSection);
@@ -265,21 +320,13 @@ function showOutgoingLinkModal(univerAPI: FUniver, app: App): void {
       : files.filter(f => f.extension === 'md');
 
     filtered.slice(0, 50).forEach(file => {
-      const item = S(document.createElement('div'), {
-        padding: '10px 14px', cursor: 'pointer',
-        borderBottom: '1px solid var(--background-modifier-border, #eee)',
-        transition: 'background 0.1s',
-      });
-      item.addEventListener('mouseenter', () => { item.style.background = 'var(--background-modifier-hover, #f0f0f0)'; });
-      item.addEventListener('mouseleave', () => { item.style.background = ''; });
+      const item = activeWindow.createDiv({ cls: 'excel-outgoing-link-item' });
 
-      const nameEl = item.createSpan();
+      const nameEl = item.createSpan({ cls: 'excel-outgoing-link-item-name' });
       nameEl.textContent = file.basename;
-      S(nameEl, { display: 'block', fontSize: '15px', fontWeight: '500', color: 'var(--text-normal, #333)', lineHeight: '1.3' });
 
-      const pathEl = item.createSpan();
+      const pathEl = item.createSpan({ cls: 'excel-outgoing-link-item-path' });
       pathEl.textContent = file.path;
-      S(pathEl, { display: 'block', fontSize: '13px', color: 'var(--text-muted, #888)', lineHeight: '1.3', wordBreak: 'break-all' });
 
       item.addEventListener('click', () => {
         insertOutgoingLink(univerAPI, app, file);
@@ -293,7 +340,7 @@ function showOutgoingLinkModal(univerAPI: FUniver, app: App): void {
   renderList('');
 
   const handleClose = () => container.remove();
-  container.addEventListener('click', (e) => {
+  container.addEventListener('click', (e: MouseEvent) => {
     if (e.target === container) handleClose();
   });
 
@@ -308,7 +355,7 @@ function insertOutgoingLink(univerAPI: FUniver, app: App, file: TFile): void {
   const linkText = app.metadataCache.fileToLinktext(file, sourcePath, true);
   const wikiLink = `[[${linkText}]]`;
 
-  const activeSheet = (activeWorkbook as any).getActiveSheet();
+  const activeSheet = activeWorkbook.getActiveSheet();
   if (!activeSheet) return;
 
   const range = activeSheet.getSelection()?.getActiveRange();
@@ -318,7 +365,7 @@ function insertOutgoingLink(univerAPI: FUniver, app: App, file: TFile): void {
   const col = range.getColumn();
 
   try {
-    (univerAPI as any).executeCommand(AddHyperLinkCommand.id, {
+    univerAPI.executeCommand(AddHyperLinkCommand.id, {
       unitId: activeWorkbook.getId(),
       subUnitId: activeSheet.getSheet().id,
       link: {
@@ -339,18 +386,18 @@ function copyEmbedLink(univerAPI: FUniver): void {
   if (!activeWorkbook) return;
 
   const workbookId = activeWorkbook.getId();
-  const activeSheet = (activeWorkbook as any).getActiveSheet();
+  const activeSheet = activeWorkbook.getActiveSheet();
   if (!activeSheet) return;
 
   let sheetName: string | undefined;
   try {
-    sheetName = (activeSheet as any).getName?.() || activeSheet.getSheet()?.name;
+    sheetName = activeSheet.getName?.() || activeSheet.getSheet()?.name;
   } catch {
     sheetName = undefined;
   }
   if (!sheetName) {
     const sheetId = activeSheet.getSheetId();
-    const workbookData = (activeWorkbook as any).save();
+    const workbookData = activeWorkbook.save();
     if (workbookData?.sheets?.[sheetId]?.name) {
       sheetName = workbookData.sheets[sheetId].name;
     }
@@ -369,16 +416,7 @@ function copyEmbedLink(univerAPI: FUniver): void {
 
   const embedLink = `![[${workbookId}#${sheetName}${rangeStr}]]`;
 
-  navigator.clipboard.writeText(embedLink).then(() => {
-    console.log('Embed link copied:', embedLink);
-  }).catch(() => {
-    const textarea = document.createElement('textarea');
-    textarea.value = embedLink;
-    document.body.appendChild(textarea);
-    textarea.select();
-    document.execCommand('copy');
-    document.body.removeChild(textarea);
-  });
+  void navigator.clipboard.writeText(embedLink);
 }
 
 function colToLetter(col: number): string {
@@ -394,6 +432,6 @@ function colToLetter(col: number): string {
 export function handleOutgoingLinkClick(url: string, app: App): void {
   if (url.startsWith('[[') && url.endsWith(']]')) {
     const linkText = url.slice(2, -2);
-    app.workspace.openLinkText(linkText, '', 'split');
+    void app.workspace.openLinkText(linkText, '', 'split');
   }
 }

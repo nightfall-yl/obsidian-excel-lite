@@ -2,6 +2,8 @@ const en: Record<string, string> = {
   CREATE_SHEET: 'New Excel file',
   IMPORT_XLSX: 'Import xlsx file',
   EXPORT_XLSX: 'Export current sheet as xlsx',
+  IMPORT_CSV: 'Import csv file',
+  EXPORT_CSV: 'Export current sheet as csv',
   IMPORTING: 'Importing xlsx...',
   EXPORTING: 'Exporting xlsx...',
   IMPORT_SUCCESS: 'Xlsx imported successfully!',

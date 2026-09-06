@@ -16,9 +16,9 @@ function copyBuildOutput() {
       const outDir = resolve(__dirname, 'dist');
       await writeFile(resolve(outDir, 'manifest.json'), `${JSON.stringify({
         id: pkg.name,
-        name: 'Excel',
+        name: 'Excel Lite',
         version: pkg.version,
-        minAppVersion: '0.15.0',
+        minAppVersion: '1.11.0',
         description: pkg.description,
         author: pkg.author,
         isDesktopOnly: false,
@@ -33,21 +33,21 @@ function copyBuildOutput() {
         if (!mainJs.startsWith(PROCESS_POLYFILL)) {
           await writeFile(resolve(outDir, 'main.js'), PROCESS_POLYFILL + '\n' + mainJs);
         }
-      } catch (e) { /* ignore */ }
+      } catch (e) { console.warn('[excel-lite:build] prepend process polyfill failed:', e); }
       try {
         await copyFile(resolve(outDir, 'main.js'), join(rootDir, 'main.js'));
-      } catch (e) { /* ignore */ }
+      } catch (e) { console.warn('[excel-lite:build] copy main.js failed:', e); }
       try {
-        const styleCssPath = resolve(outDir, 'style.css');
+        const styleCssPath = resolve(outDir, 'excel-lite.css');
         const stylesCssPath = resolve(outDir, 'styles.css');
         await rename(styleCssPath, stylesCssPath).catch(() => {});
         await copyFile(stylesCssPath, join(rootDir, 'styles.css'));
         const customCss = await readFile(resolve(rootDir, 'src/custom.css'), 'utf-8');
         await appendFile(join(rootDir, 'styles.css'), customCss);
-      } catch (e) { /* ignore */ }
+      } catch (e) { console.warn('[excel-lite:build] copy styles.css failed:', e); }
       try {
         await copyFile(resolve(outDir, 'manifest.json'), join(rootDir, 'manifest.json'));
-      } catch (e) { /* ignore */ }
+      } catch (e) { console.warn('[excel-lite:build] copy manifest.json failed:', e); }
     },
   };
 }

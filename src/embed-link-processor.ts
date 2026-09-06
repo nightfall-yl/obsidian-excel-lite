@@ -100,15 +100,15 @@ function renderCellDataAsTable(
   endRow: number,
   endCol: number,
 ): HTMLTableElement {
-  const table = document.createElement('table');
+  const table = activeWindow.createEl('table');
   table.className = 'excel-embed-table';
 
   for (let r = startRow; r <= endRow; r++) {
-    const tr = document.createElement('tr');
+    const tr = activeWindow.createEl('tr');
     for (let c = startCol; c <= endCol; c++) {
       const cell = cellData?.[r]?.[c];
       const value = getCellValue(cell);
-      const td = document.createElement(r === startRow ? 'th' : 'td');
+      const td = activeWindow.createEl(r === startRow ? 'th' : 'td');
       td.textContent = value;
       tr.appendChild(td);
     }
@@ -180,10 +180,9 @@ function createUniverEmbedElement(
   plugin: any,
   ctx: any,
 ): HTMLDivElement {
-  const embedEl = document.createElement('div');
+  const embedEl = activeWindow.createDiv();
   embedEl.className = 'excel-embed-univer';
   embedEl.style.height = `${height}px`;
-  embedEl.style.width = '100%';
 
   let disposed = false;
   let disposeUniver: (() => void) | null = null;
@@ -200,11 +199,11 @@ function createUniverEmbedElement(
 
   const observer = new MutationObserver(() => {
     if (disposed) return;
-    if (!document.body.contains(embedEl)) return;
+    if (!activeDocument.body.contains(embedEl)) return;
 
     observer.disconnect();
 
-    const isDark = plugin.app.isDarkMode?.() ?? document.body.hasClass?.('theme-dark') ?? false;
+    const isDark = plugin.app.isDarkMode?.() ?? activeDocument.body.hasClass?.('theme-dark') ?? false;
     const { univerAPI, univer } = createUniverInstance(embedEl, isDark, plugin.app, !Platform.isDesktopApp, {
       header: false,
       footer: showFooter,
@@ -217,30 +216,25 @@ function createUniverEmbedElement(
     disposeUniver = () => {
       try {
         lifecycleDisposable?.dispose();
-      } catch {
-        // ignore cleanup failures from already-disposed Univer internals
-      }
+      } catch (e) { console.warn('[excel-lite] dispose lifecycle listener failed:', e); }
       try {
         univer.dispose();
-      } catch {
-        // ignore cleanup failures from already-disposed Univer internals
-      }
+      } catch (e) { console.warn('[excel-lite] dispose univer instance failed:', e); }
     };
 
     const workbook = univerAPI.createWorkbook(workbookData);
-    lifecycleDisposable = univerAPI.addEvent(univerAPI.Event.LifeCycleChanged, async (event: any) => {
+    lifecycleDisposable = univerAPI.addEvent(univerAPI.Event.LifeCycleChanged, (event: any) => {
       if (event.stage !== LifecycleStages.Rendered) return;
 
       try {
-        const permission = (workbook as any)?.getWorkbookPermission?.();
-        await permission?.setReadOnly?.();
-        (univerAPI as any).setPermissionDialogVisible?.(false);
-      } catch {
-      }
-    }) as any;
+        const permission = workbook?.getWorkbookPermission?.();
+        void permission?.setReadOnly?.();
+        univerAPI.setPermissionDialogVisible(false);
+      } catch (e) { console.warn('[excel-lite] permission setup failed:', e); }
+    });
   });
 
-  observer.observe(document.body, { childList: true, subtree: true });
+  observer.observe(activeDocument.body, { childList: true, subtree: true });
 
   ctx?.addChild?.(new class extends MarkdownRenderChild {
     onunload(): void {
@@ -384,20 +378,20 @@ async function createEmbedLinkDiv(
 ): Promise<HTMLDivElement> {
   const workbookData = parseSheetFile(data, file.path);
   if (!workbookData) {
-    const div = document.createElement('div');
-    div.textContent = 'No Data';
+    const div = activeWindow.createDiv();
+    div.textContent = 'No data';
     return div;
   }
 
   const parseResult = parseEmbedLinkSyntax(`${src}|${alt}`);
   const sheetData = findSheet(workbookData, parseResult.sheetName);
   if (!sheetData?.cellData) {
-    const div = document.createElement('div');
-    div.textContent = 'No Sheet Data';
+    const div = activeWindow.createDiv();
+    div.textContent = 'No sheet data';
     return div;
   }
 
-  const container = document.createElement('div');
+  const container = activeWindow.createDiv();
   container.className = 'excel-embed-container';
 
   const effectiveHeight = parseResult.height ?? plugin.settings.embedTableHeight;
@@ -411,7 +405,7 @@ async function createEmbedLinkDiv(
       },
     });
     fileLabel.textContent = file.basename;
-    fileLabel.addEventListener('click', (event) => {
+    fileLabel.addEventListener('click', (event: MouseEvent) => {
       event.stopPropagation();
       plugin.app.workspace.openLinkText(file.path, '', 'split');
     });
@@ -438,8 +432,8 @@ async function createEmbedLinkDiv(
   }
 
   if (parseResult.displayType === 'html') {
+    container.addClass('excel-embed-overflow-auto');
     container.style.maxHeight = `${effectiveHeight}px`;
-    container.style.overflowY = 'auto';
     const table = renderCellDataAsTable(sheetData.cellData, startRow, startCol, endRow, endCol);
     container.appendChild(table);
     return container;

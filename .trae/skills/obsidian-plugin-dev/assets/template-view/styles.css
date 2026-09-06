@@ -1,0 +1,44 @@
+/* {{PLUGIN_NAME}} styles */
+
+/* ══════════════════════════════════════ */
+/* 视图容器                                */
+/* ══════════════════════════════════════ */
+
+.{{PLUGIN_ID}}-view-container {
+	padding: 10px;
+	background-color: var(--background-primary);
+	color: var(--text-normal);
+}
+
+.{{PLUGIN_ID}}-view-container h4 {
+	color: var(--text-normal);
+	margin-bottom: 8px;
+}
+
+.{{PLUGIN_ID}}-view-container .file-list {
+	list-style: none;
+	padding: 0;
+	margin: 0;
+}
+
+.{{PLUGIN_ID}}-view-container .file-item {
+	padding: 6px 8px;
+	cursor: pointer;
+	border-radius: var(--radius-s);
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.{{PLUGIN_ID}}-view-container .file-item:hover {
+	background-color: var(--background-modifier-hover);
+}
+
+.{{PLUGIN_ID}}-view-container .file-name {
+	color: var(--text-normal);
+}
+
+.{{PLUGIN_ID}}-view-container .file-path {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}

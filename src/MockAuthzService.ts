@@ -11,7 +11,7 @@ import type {
   IUpdatePermPointRequest,
   IUnitRoleKV,
 } from '@univerjs/protocol';
-import { UnitAction, UnitObject, UnitRole } from '@univerjs/protocol';
+import { UnitAction, UnitObject } from '@univerjs/protocol';
 
 export class MockAuthzService implements IAuthzIoService {
   async create(_config: ICreateRequest): Promise<string> {

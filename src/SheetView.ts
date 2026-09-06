@@ -46,7 +46,7 @@ export class SheetView extends TextFileView {
   }
 
   async onUnloadFile(file: TFile): Promise<void> {
-    this.save();
+    void this.save();
     this.disposeUniver();
   }
 
@@ -106,7 +106,7 @@ export class SheetView extends TextFileView {
   private renderUniver(workbookData: IWorkbookData, mobilePreviewMode?: boolean): void {
     this.disposeUniver();
 
-    this.contentEl.style.padding = '0';
+    this.contentEl.addClass('excel-content');
     this.contentEl.empty();
 
     const isMobile = !Platform.isDesktopApp;
@@ -116,8 +116,6 @@ export class SheetView extends TextFileView {
     }
 
     this.sheetContainerEl = this.contentEl.createDiv({ cls: 'excel-container' });
-    this.sheetContainerEl.style.width = '100%';
-    this.sheetContainerEl.style.height = '100%';
 
     if (isMobile) {
       if (this.isMobilePreviewMode) {
@@ -155,16 +153,16 @@ export class SheetView extends TextFileView {
     if (this.currentSheetId) {
       const activeWorkbook = this.univerAPI.getActiveWorkbook();
       if (activeWorkbook) {
-        (activeWorkbook as any).setActiveSheet(this.currentSheetId);
+        activeWorkbook.setActiveSheet(this.currentSheetId);
       }
     }
 
     if (this.isMobilePreviewMode) {
       const activeWorkbook = this.univerAPI.getActiveWorkbook();
       if (activeWorkbook) {
-        const permission = (activeWorkbook as any).getWorkbookPermission();
+        const permission = activeWorkbook.getWorkbookPermission();
         permission.setReadOnly();
-        (this.univerAPI as any).setPermissionDialogVisible(false);
+        this.univerAPI.setPermissionDialogVisible(false);
       }
     }
   }
@@ -175,7 +173,7 @@ export class SheetView extends TextFileView {
     if (this.univerAPI) {
       const activeWorkbook = this.univerAPI.getActiveWorkbook();
       if (activeWorkbook) {
-        const activeSheet = (activeWorkbook as any).getActiveSheet();
+        const activeSheet = activeWorkbook.getActiveSheet();
         if (activeSheet) {
           this.currentSheetId = activeSheet.getSheetId();
         }
@@ -189,6 +187,10 @@ export class SheetView extends TextFileView {
     }
     
     this.renderUniver(this.lastWorkbookData, this.isMobilePreviewMode);
+  }
+
+  public toggleMobileModeExternal(): void {
+    this.toggleMobileMode();
   }
 
   private setupDataSync(): void {
@@ -211,14 +213,14 @@ export class SheetView extends TextFileView {
   private setupImportExportFeature(): void {
     if (!this.univer || !this.univerAPI) return;
 
-    const injector = (this.univer as any).__getInjector();
+    const injector = this.univer.__getInjector();
     if (!injector) return;
 
     try {
       this.disposeImportExport = setupImportExport(
         injector,
         this.univerAPI,
-        (data: IWorkbookData) => this.handleImportData(data),
+        (data: IWorkbookData) => { void this.handleImportData(data); },
       );
     } catch (e) {
       console.error('Excel: failed to setup import/export:', e);
@@ -249,8 +251,7 @@ export class SheetView extends TextFileView {
     if (this.disposeImportExport) {
       try {
         this.disposeImportExport();
-      } catch (e) {
-      }
+      } catch (e) { console.warn('[excel-lite] disposeUniver cleanup failed:', e); }
       this.disposeImportExport = null;
     }
 
@@ -261,15 +262,13 @@ export class SheetView extends TextFileView {
           this.univerAPI.disposeUnit(activeWorkbook.getId());
         }
         this.univerAPI.dispose();
-      } catch (e) {
-      }
+      } catch (e) { console.warn('[excel-lite] disposeUniver cleanup failed:', e); }
       this.univerAPI = null;
     }
     if (this.univer) {
       try {
         this.univer.dispose();
-      } catch (e) {
-      }
+      } catch (e) { console.warn('[excel-lite] disposeUniver cleanup failed:', e); }
       this.univer = null;
     }
     this.sheetContainerEl = null;

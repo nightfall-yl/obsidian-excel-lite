@@ -12,7 +12,7 @@ import '@univerjs/sheets-thread-comment-ui/lib/index.css';
 import '@univerjs/sheets-hyper-link-ui/lib/index.css';
 import '@univerjs/sheets-note-ui/lib/index.css';
 
-import { IAuthzIoService, ICommandService, LocaleService, LocaleType, LogLevel, Tools, Univer, UserManagerService } from '@univerjs/core';
+import { IAuthzIoService, ICommandService, LocaleService, LocaleType, LogLevel, merge, Univer, UserManagerService } from '@univerjs/core';
 import { FUniver } from '@univerjs/core/facade';
 import { defaultTheme } from '@univerjs/themes';
 import { MockAuthzService } from './MockAuthzService';
@@ -63,7 +63,6 @@ import sheetsFormulaZhCN from '@univerjs/sheets-formula/lib/es/locale/zh-CN';
 import sheetsFormulaUiZhCN from '@univerjs/sheets-formula-ui/lib/es/locale/zh-CN';
 import sheetsNumfmtUiZhCN from '@univerjs/sheets-numfmt-ui/lib/es/locale/zh-CN';
 import sheetsFilterUiZhCN from '@univerjs/sheets-filter-ui/lib/es/locale/zh-CN';
-import sheetsSortZhCN from '@univerjs/sheets-sort/lib/es/locale/zh-CN';
 import sheetsSortUiZhCN from '@univerjs/sheets-sort-ui/lib/es/locale/zh-CN';
 import findReplaceZhCN from '@univerjs/find-replace/lib/es/locale/zh-CN';
 import uiZhCN from '@univerjs/ui/lib/es/locale/zh-CN';
@@ -80,7 +79,6 @@ import sheetsFormulaEnUS from '@univerjs/sheets-formula/lib/es/locale/en-US';
 import sheetsFormulaUiEnUS from '@univerjs/sheets-formula-ui/lib/es/locale/en-US';
 import sheetsNumfmtUiEnUS from '@univerjs/sheets-numfmt-ui/lib/es/locale/en-US';
 import sheetsFilterUiEnUS from '@univerjs/sheets-filter-ui/lib/es/locale/en-US';
-import sheetsSortEnUS from '@univerjs/sheets-sort/lib/es/locale/en-US';
 import sheetsSortUiEnUS from '@univerjs/sheets-sort-ui/lib/es/locale/en-US';
 import findReplaceEnUS from '@univerjs/find-replace/lib/es/locale/en-US';
 import uiEnUS from '@univerjs/ui/lib/es/locale/en-US';
@@ -89,7 +87,7 @@ import sheetsThreadCommentUiEnUS from '@univerjs/sheets-thread-comment-ui/lib/es
 import sheetsHyperLinkUiEnUS from '@univerjs/sheets-hyper-link-ui/lib/es/locale/en-US';
 import sheetsNoteUiEnUS from '@univerjs/sheets-note-ui/lib/es/locale/en-US';
 
-const zhCNLocale = Tools.deepMerge(
+const zhCNLocale = merge(
   {},
   designZhCN,
   docsUiZhCN,
@@ -99,7 +97,6 @@ const zhCNLocale = Tools.deepMerge(
   sheetsFormulaUiZhCN,
   sheetsNumfmtUiZhCN,
   sheetsFilterUiZhCN,
-  sheetsSortZhCN,
   sheetsSortUiZhCN,
   findReplaceZhCN,
   uiZhCN,
@@ -116,7 +113,7 @@ const zhCNLocale = Tools.deepMerge(
   },
 );
 
-const enUSLocale = Tools.deepMerge(
+const enUSLocale = merge(
   {},
   designEnUS,
   docsUiEnUS,
@@ -126,7 +123,6 @@ const enUSLocale = Tools.deepMerge(
   sheetsFormulaUiEnUS,
   sheetsNumfmtUiEnUS,
   sheetsFilterUiEnUS,
-  sheetsSortEnUS,
   sheetsSortUiEnUS,
   findReplaceEnUS,
   uiEnUS,
@@ -212,17 +208,17 @@ export function createUniverInstance(
       if (commandInfo.id === 'sheet.command.insert-sheet') {
         const correctPrefix = localeService.t('sheets.tabs.sheet');
 
-        setTimeout(() => {
+        window.setTimeout(() => {
           try {
             const activeWorkbook = univerAPI.getActiveWorkbook();
             if (!activeWorkbook) return;
-            const activeSheet = (activeWorkbook as any).getActiveSheet();
+            const activeSheet = activeWorkbook.getActiveSheet();
             if (!activeSheet) return;
             const currentName = activeSheet.getSheetName();
 
             if (currentName.startsWith('Sheet')) {
               // Find the next available number for the locale prefix
-              const existingSheets = (activeWorkbook as any).getSheets();
+              const existingSheets = activeWorkbook.getSheets();
               const usedNumbers = new Set<number>();
               for (const sheet of existingSheets) {
                 const m = sheet.getSheetName().match(new RegExp(`^${correctPrefix}(\\d+)$`));
@@ -232,11 +228,11 @@ export function createUniverInstance(
               while (usedNumbers.has(nextNum)) nextNum++;
               activeSheet.setName(correctPrefix + nextNum);
             }
-          } catch (_) { /* ignore */ }
+          } catch { /* ignore */ }
         }, 0);
       }
     });
-  } catch (_) { /* ignore */ }
+  } catch { /* ignore */ }
 
   return { univerAPI, univer };
 }
@@ -280,7 +276,7 @@ function registerDesktopPlugins(univer: Univer, container: string | HTMLElement,
       navigateToOtherWebsite: (url: string) => {
         if (url.startsWith('[[') && url.endsWith(']]') && app) {
           const linkText = url.slice(2, -2);
-          app.workspace.openLinkText(linkText, '', 'split');
+          void app.workspace.openLinkText(linkText, '', 'split');
         } else {
           window.open(url, '_blank');
         }

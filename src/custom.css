@@ -52,6 +52,18 @@
   box-sizing: border-box;
 }
 
+.excel-content {
+  padding: 0 !important;
+}
+
+.excel-folder-input {
+  caret-color: auto;
+}
+
+.excel-embed-overflow-auto {
+  overflow-y: auto;
+}
+
 .view-action .nav-action-button svg {
   width: 18px;
   height: 18px;

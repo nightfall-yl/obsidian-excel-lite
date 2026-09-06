@@ -50,14 +50,29 @@ export default class ExcelPlugin extends Plugin {
       this.registerExtensions([SHEET_FILE_EXT], VIEW_TYPE_SHEET);
 
       this.addRibbonIcon('sheet', t('CREATE_SHEET'), () => {
-        this.createAndOpenSheet(this.settings.folder);
+        void this.createAndOpenSheet(this.settings.folder);
       });
 
       this.addCommand({
         id: 'create-sheet',
         name: t('CREATE_SHEET'),
+        hotkeys: [{ modifiers: ['Mod', 'Shift'], key: 'e' }],
         callback: () => {
-          this.createAndOpenSheet(this.settings.folder);
+          void this.createAndOpenSheet(this.settings.folder);
+        },
+      });
+
+      this.addCommand({
+        id: 'toggle-sheet-preview',
+        name: 'Toggle mobile preview mode',
+        callback: () => {
+          const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_SHEET);
+          for (const leaf of leaves) {
+            const view = leaf.view;
+            if (view instanceof SheetView) {
+              view.toggleMobileModeExternal();
+            }
+          }
         },
       });
 
@@ -69,7 +84,7 @@ export default class ExcelPlugin extends Plugin {
               .setIcon('sheet')
               .onClick(() => {
                 const folder = file instanceof TFolder ? file.path : file.parent?.path || '/';
-                this.createAndOpenSheet(folder);
+                void this.createAndOpenSheet(folder);
               });
           });
         }),
@@ -82,18 +97,18 @@ export default class ExcelPlugin extends Plugin {
       this.addSettingTab(new ExcelSettingTab(this, this.app));
     } catch (e) {
       const errStr = e instanceof Error ? `${e.message}\n${e.stack || ''}` : String(e);
-      console.error('[obsidian-excel] onload error:', errStr);
+      console.error('[excel-lite] onload error:', errStr);
       try {
         await this.app.vault.adapter.write(
           'excel-error-log.txt',
           `[${new Date().toISOString()}]\n${errStr}`
         );
-      } catch { /* ignore */ }
+      } catch (e) { console.warn('[excel-lite] writing error log failed:', e); }
     }
   }
 
   onunload() {
-    this.app.workspace.detachLeavesOfType(VIEW_TYPE_SHEET);
+    // Intentionally not detaching leaves to preserve user layout
   }
 
   async loadSettings(): Promise<void> {
@@ -105,7 +120,7 @@ export default class ExcelPlugin extends Plugin {
   }
 
   private registerMonkeyPatches() {
-    const self = this;
+    const { app } = this;
 
     this.register(
       around(WorkspaceLeaf.prototype, {
@@ -116,7 +131,7 @@ export default class ExcelPlugin extends Plugin {
               && state.state?.file
             ) {
               const filepath = state.state.file as string;
-              const cache = self.app.metadataCache.getCache(filepath);
+              const cache = app.metadataCache.getCache(filepath);
 
               if (
               (cache?.frontmatter && SHEET_FRONTMATTER_KEYS.some(key => cache.frontmatter![key]))
@@ -142,9 +157,9 @@ export default class ExcelPlugin extends Plugin {
       const markdownLeaves = this.app.workspace.getLeavesOfType('markdown');
       for (const leaf of markdownLeaves) {
         if (leaf.view instanceof SheetView) continue;
-        const file = (leaf.view as any).file;
+        const file = (leaf.view as { file?: TFile }).file;
         if (file && this.isSheetFile(file)) {
-          this.setSheetView(leaf);
+          void this.setSheetView(leaf);
         }
       }
     });
@@ -220,82 +235,94 @@ class ExcelSettingTab extends PluginSettingTab {
 
     new SettingGroup(containerEl)
       .setHeading(t('SETTINGS_FILE_TITLE'))
-      .addSetting((setting) => setting
-        .setName(t('SETTING_FILENAME_PREFIX'))
-        .setDesc(t('SETTING_FILENAME_PREFIX_DESC'))
-        .addText((text) => text
-          .setPlaceholder('Excel ')
-          .setValue(this.plugin.settings.filenamePrefix)
-          .onChange(async (value) => {
-            this.plugin.settings.filenamePrefix = value;
-            await this.plugin.saveSettings();
-          })))
-      .addSetting((setting) => setting
-        .setName(t('SETTING_FOLDER'))
-        .setDesc(t('SETTING_FOLDER_DESC'))
-        .addText((text) => {
-          text
-            .setPlaceholder('/')
-            .setValue(this.plugin.settings.folder)
-            .onChange(async (value) => {
-              this.plugin.settings.folder = value || '/';
-              await this.plugin.saveSettings();
-            });
+      .addSetting((setting) => {
+        setting
+          .setName(t('SETTING_FILENAME_PREFIX'))
+          .setDesc(t('SETTING_FILENAME_PREFIX_DESC'))
+          .addText((text) => text
+            .setPlaceholder('Excel ')
+            .setValue(this.plugin.settings.filenamePrefix)
+            .onChange((value) => {
+              this.plugin.settings.filenamePrefix = value;
+              void this.plugin.saveSettings();
+            }));
+      })
+      .addSetting((setting) => {
+        setting
+          .setName(t('SETTING_FOLDER'))
+          .setDesc(t('SETTING_FOLDER_DESC'))
+          .addText((text) => {
+            text
+              .setPlaceholder('/')
+              .setValue(this.plugin.settings.folder)
+              .onChange((value) => {
+                this.plugin.settings.folder = value || '/';
+                void this.plugin.saveSettings();
+              });
 
-          const inputEl = text.inputEl;
-          inputEl.style.caretColor = 'auto';
-          inputEl.setAttribute('autocomplete', 'off');
-          inputEl.setAttribute('readonly', '');
-          inputEl.addEventListener('mousedown', () => {
-            inputEl.removeAttribute('readonly');
-          }, { once: true });
-          this.folderSuggests.push(new FolderSuggest(this.app, inputEl, async (folderPath) => {
-            this.plugin.settings.folder = folderPath;
-            await this.plugin.saveSettings();
-          }));
-        }))
-      .addSetting((setting) => setting
-        .setName(t('SETTING_FILE_TIME_FORMAT'))
-        .setDesc(t('SETTING_FILE_TIME_FORMAT_DESC'))
-        .addText((text) => text
-          .setPlaceholder('YYYY-MM-DD HH.mm.ss')
-          .setValue(this.plugin.settings.fileTimeFormat)
-          .onChange(async (value) => {
-            this.plugin.settings.fileTimeFormat = value;
-            await this.plugin.saveSettings();
-          })));
+            const inputEl = text.inputEl;
+            inputEl.addClass('excel-folder-input');
+            inputEl.setAttribute('autocomplete', 'off');
+            inputEl.setAttribute('readonly', '');
+            inputEl.addEventListener('mousedown', () => {
+              inputEl.removeAttribute('readonly');
+            }, { once: true });
+            this.folderSuggests.push(new FolderSuggest(this.app, inputEl, async (folderPath) => {
+              this.plugin.settings.folder = folderPath;
+              await this.plugin.saveSettings();
+            }));
+          });
+      })
+      .addSetting((setting) => {
+        setting
+          .setName(t('SETTING_FILE_TIME_FORMAT'))
+          .setDesc(t('SETTING_FILE_TIME_FORMAT_DESC'))
+          .addText((text) => text
+            .setPlaceholder('YYYY-MM-DD HH.mm.ss')
+            .setValue(this.plugin.settings.fileTimeFormat)
+            .onChange((value) => {
+              this.plugin.settings.fileTimeFormat = value;
+              void this.plugin.saveSettings();
+            }));
+      });
 
     new SettingGroup(containerEl)
       .setHeading(t('SETTINGS_EMBED_TITLE'))
-      .addSetting((setting) => setting
-        .setName(t('SETTING_EMBED_HEIGHT'))
-        .setDesc(t('SETTING_EMBED_HEIGHT_DESC'))
-        .addText((text) => text
-          .setPlaceholder('300')
-          .setValue(String(this.plugin.settings.embedTableHeight))
-          .onChange(async (value) => {
-            const num = parseInt(value);
-            this.plugin.settings.embedTableHeight = isNaN(num) ? 300 : Math.max(50, Math.min(2000, num));
-            await this.plugin.saveSettings();
-          })))
-      .addSetting((setting) => setting
-        .setName(t('SETTING_SHOW_JUMP_ORIGINAL'))
-        .setDesc(t('SETTING_SHOW_JUMP_ORIGINAL_DESC'))
-        .addToggle((toggle) => toggle
-          .setValue(this.plugin.settings.showJumpToOriginal)
-          .onChange(async (value) => {
-            this.plugin.settings.showJumpToOriginal = value;
-            await this.plugin.saveSettings();
-          })))
-      .addSetting((setting) => setting
-        .setName(t('SETTING_SHOW_EMBED_BOTTOM'))
-        .setDesc(t('SETTING_SHOW_EMBED_BOTTOM_DESC'))
-        .addToggle((toggle) => toggle
-          .setValue(this.plugin.settings.showEmbedBottomContent)
-          .onChange(async (value) => {
-            this.plugin.settings.showEmbedBottomContent = value;
-            await this.plugin.saveSettings();
-          })));
+      .addSetting((setting) => {
+        setting
+          .setName(t('SETTING_EMBED_HEIGHT'))
+          .setDesc(t('SETTING_EMBED_HEIGHT_DESC'))
+          .addText((text) => text
+            .setPlaceholder('300')
+            .setValue(String(this.plugin.settings.embedTableHeight))
+            .onChange((value) => {
+              const num = parseInt(value);
+              this.plugin.settings.embedTableHeight = isNaN(num) ? 300 : Math.max(50, Math.min(2000, num));
+              void this.plugin.saveSettings();
+            }));
+      })
+      .addSetting((setting) => {
+        setting
+          .setName(t('SETTING_SHOW_JUMP_ORIGINAL'))
+          .setDesc(t('SETTING_SHOW_JUMP_ORIGINAL_DESC'))
+          .addToggle((toggle) => toggle
+            .setValue(this.plugin.settings.showJumpToOriginal)
+            .onChange((value) => {
+              this.plugin.settings.showJumpToOriginal = value;
+              void this.plugin.saveSettings();
+            }));
+      })
+      .addSetting((setting) => {
+        setting
+          .setName(t('SETTING_SHOW_EMBED_BOTTOM'))
+          .setDesc(t('SETTING_SHOW_EMBED_BOTTOM_DESC'))
+          .addToggle((toggle) => toggle
+            .setValue(this.plugin.settings.showEmbedBottomContent)
+            .onChange((value) => {
+              this.plugin.settings.showEmbedBottomContent = value;
+              void this.plugin.saveSettings();
+            }));
+      });
   }
 
   hide(): void {

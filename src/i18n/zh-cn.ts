@@ -2,6 +2,8 @@ const zhCN: Record<string, string> = {
   CREATE_SHEET: '新建Excel文件',
   IMPORT_XLSX: '导入 xlsx 文件',
   EXPORT_XLSX: '导出为 xlsx 文件',
+  IMPORT_CSV: '导入 csv 文件',
+  EXPORT_CSV: '导出为 csv 文件',
   IMPORTING: '导入中...',
   EXPORTING: '导出中...',
   IMPORT_SUCCESS: 'xlsx 导入成功！',
