@@ -30,6 +30,7 @@ import { UniverSheetsFormulaUIPlugin } from '@univerjs/sheets-formula-ui';
 import { UniverSheetsNumfmtPlugin } from '@univerjs/sheets-numfmt';
 import { UniverSheetsNumfmtUIPlugin } from '@univerjs/sheets-numfmt-ui';
 import { UniverSheetsFilterPlugin } from '@univerjs/sheets-filter';
+import { UniverSheetsFilterUIPlugin } from '@univerjs/sheets-filter-ui';
 import { UniverSheetsSortPlugin } from '@univerjs/sheets-sort';
 import { UniverSheetsSortUIPlugin } from '@univerjs/sheets-sort-ui';
 import { UniverFindReplacePlugin } from '@univerjs/find-replace';
@@ -283,6 +284,7 @@ function registerDesktopPlugins(univer: Univer, container: string | HTMLElement,
   univer.registerPlugin(UniverSheetsFormulaUIPlugin);
   univer.registerPlugin(UniverFindReplacePlugin);
   univer.registerPlugin(UniverSheetsFilterPlugin);
+  univer.registerPlugin(UniverSheetsFilterUIPlugin);
   univer.registerPlugin(UniverSheetsSortPlugin);
   univer.registerPlugin(UniverSheetsSortUIPlugin);
   univer.registerPlugin(UniverThreadCommentPlugin);
@@ -325,6 +327,7 @@ function registerMobilePreviewPlugins(univer: Univer, container: string | HTMLEl
   univer.registerPlugin(UniverSheetsPlugin);
   univer.registerPlugin(UniverSheetsMobileUIPlugin);
   univer.registerPlugin(UniverSheetsFilterPlugin);
+  univer.registerPlugin(UniverSheetsFilterUIPlugin);
   univer.registerPlugin(UniverSheetsNumfmtPlugin);
   univer.registerPlugin(UniverFormulaEnginePlugin);
   univer.registerPlugin(UniverSheetsFormulaPlugin, {
@@ -352,6 +355,7 @@ function registerMobileEditPlugins(univer: Univer, container: string | HTMLEleme
   univer.registerPlugin(UniverSheetsMobileUIPlugin, {
   });
   univer.registerPlugin(UniverSheetsFilterPlugin);
+  univer.registerPlugin(UniverSheetsFilterUIPlugin);
   univer.registerPlugin(UniverSheetsNumfmtPlugin);
   univer.registerPlugin(UniverSheetsNumfmtUIPlugin);
   univer.registerPlugin(UniverFormulaEnginePlugin);

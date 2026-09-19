@@ -1,96 +1,82 @@
 # Excel Lite
 
-> Free Excel-like spreadsheet plugin for Obsidian, powered by [Univer](https://github.com/dream-num/univer).
+> A lightweight, fully-featured spreadsheet plugin for Obsidian, powered by [Univer](https://github.com/dream-num/univer).
 
-[![Version](https://img.shields.io/badge/version-1.0.0-blue)](https://github.com/nightfall/obsidian-excel)
-[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Obsidian](https://img.shields.io/badge/Obsidian-0.15.0%2B-purple)](https://obsidian.md)
-[**中文**](README_zh-CN.md) | English
+[![Version](https://img.shields.io/badge/version-26.1.3-blue)](https://github.com/nightfall-yl/obsidian-excel-lite) [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE) [![Obsidian](https://img.shields.io/badge/Obsidian-1.11.0%2B-purple)](https://obsidian.md)
+[中文](README_zh-CN.md) | English
 
-## Features
+## ✨ Features
 
 ### Core
 
-- **Full spreadsheet editor** — Create and edit multi-sheet workbooks with a familiar Excel-like UI
-- **Formula engine** — Complete formula support including SUM, AVERAGE, IF, VLOOKUP, and hundreds more
+- **Full spreadsheet editor** — Create and edit multi-sheet workbooks with a familiar Excel-like interface
+- **Formula engine** — SUM, AVERAGE, IF, VLOOKUP and hundreds more — works with references across sheets
 - **Cell formatting** — Number formats, fonts, colors, borders, alignment, merge cells, freeze panes
-- **Conditional formatting** — Highlight cells based on rules (color scales, data bars, icon sets)
-- **Data validation** — Dropdown lists, number ranges, date constraints
-- **Sorting & filtering** — Sort rows/columns, filter by criteria
-- **Hyperlinks & notes** — Add clickable links and cell comments
-- **Thread comments** — Collaborative cell discussions
+- **Sorting & filtering** — Flexible row/column sorting and data filter dropdowns
+- **Hyperlinks & notes** — Clickable links, cell comments and collaborative thread comments
 
 ### Import / Export
 
-- **Import `.xlsx` / `.csv` files** — Open existing Excel workbooks or CSV files directly
-- **Export to `.xlsx` / `.csv`** — Save your sheets as standard Excel or CSV files
-- **Embed links** — Reference other Obsidian notes as embedded content within cells
+- **Import** `.xlsx` / `.xls` (Excel 97-2003) / `.csv` files directly into Obsidian
+- **Export** your workbook back to `.xlsx`, `.xls` or `.csv`
+- **Dropdown selector** — One Import button and one Export button, pick a format from the menu
+- **Embed links** — Reference Obsidian notes as embedded content inside cells
 
-### Mobile Support
+### Mobile
 
-- **Preview mode** (default) — Read-only view optimized for mobile reading; no keyboard popup, smooth scrolling
-- **Edit mode** — Full editing capabilities with toolbar, sheet tabs, and cell input
-- **One-tap toggle** — Switch between preview and edit modes via the icon button in the top-right corner
-- **Sheet position memory** — When switching modes, the active sheet is preserved
+- **Preview mode** (default) — Read-only view, no keyboard popup, optimized scrolling
+- **Edit mode** — Full editing with toolbar, sheet tabs and cell input
+- **One-tap toggle** — Switch via the book/pencil icon in the top-right corner
+- **Sheet position memory** — Active sheet is preserved when switching modes
 
 ### Integration
 
-- **`.sheet.md` files** — Sheets are stored as Markdown files with structured data blocks
-- **Frontmatter detection** — Any Markdown file with `obsidian-excel: parsed` frontmatter auto-opens in Sheet View
-- **Ribbon & commands** — Create new sheets from the ribbon icon, command palette, or file context menu
+- **`.sheet.md` files** — Workbooks are stored as plain Markdown files with structured JSON data blocks
+- **Frontmatter auto-detection** — Any Markdown file with `obsidian-excel: parsed` frontmatter opens in Sheet View
+- **Ribbon & commands** — Create new sheets from the ribbon icon, command palette or file context menu
 - **Dark mode** — Automatically follows Obsidian's theme setting
-- **Auto-save** — Changes are saved automatically after 5 seconds of inactivity
+- **Auto-save** — Changes persist automatically after 5 seconds of inactivity
 
-## Installation
+## 🚀 Installation
 
 1. Download the latest release from [Releases](../../releases)
-2. Extract to your vault's `.obsidian/plugins/obsidian-excel/` folder
-3. Reload Obsidian (or enable the plugin in Settings → Community plugins)
+2. Extract to your vault's `.obsidian/plugins/obsidian-excel-lite/` folder
+3. Reload Obsidian (or enable the plugin in **Settings → Community plugins**)
 
-Or install manually:
+Or build from source:
 
 ```bash
 cd your-vault/.obsidian/plugins/
-git clone https://github.com/nightfall_yl/obsidian-excel.git
-cd obsidian-excel
+git clone https://github.com/nightfall-yl/obsidian-excel-lite.git
+cd obsidian-excel-lite
 npm install
 npm run build
 ```
 
-## Usage
+## 📖 Usage
 
-### Creating a New Sheet
+### Create a new sheet
 
-- Click the **Spreadsheet** icon in the left ribbon
-- Use the command palette (`Ctrl/Cmd + P`) → "Create new spreadsheet"
+- Click the **spreadsheet** icon in the left ribbon
+- Use command palette (`Ctrl/Cmd + P`) → "Create new spreadsheet"
 - Right-click any folder → "Create new spreadsheet"
 
-### Opening an Existing Sheet
+### Import / Export
 
-- Click any `.sheet.md` file to open it in Sheet View
-- Files with `obsidian-excel: parsed` frontmatter open automatically
+Open a sheet, then use the two dropdown buttons in the toolbar:
 
-### Importing XLSX
+| Button | Formats |
+|--------|---------|
+| **Import** | `.xlsx` · `.xls` · `.csv` |
+| **Export** | `.xlsx` · `.xls` · `.csv` |
 
-1. Open or create a sheet
-2. Click the **Import XLSX** button in the toolbar
-3. Select a `.xlsx` file to import
+### Mobile mode
 
-### Exporting to XLSX
+Use the **book / pencil icon** in the top-right corner to switch between **preview** (read-only) and **edit** (full-featured) modes.
 
-1. Open a sheet
-2. Click the **Export XLSX** button in the toolbar
-3. The workbook is downloaded as a `.xlsx` file
+## 🗂 File Format
 
-### Mobile Mode Toggle
-
-On mobile devices, use the **book/pencil icon** in the top-right corner to switch between:
-- **Preview mode** — Read-only, optimized for viewing
-- **Edit mode** — Full editing with all features enabled
-
-## File Format
-
-Sheets are stored as plain-text Markdown files:
+Sheets are plain-text Markdown files — friendly to Git and grep:
 
 ```markdown
 ---
@@ -102,38 +88,32 @@ obsidian-excel: parsed
 ```
 ```
 
-This means sheets are fully compatible with Git version control and can be edited as text if needed.
-
-## Tech Stack
+## 🔧 Tech Stack
 
 | Component | Technology |
 |-----------|-----------|
-| Spreadsheet Engine | [Univer](https://univer.ai) 0.25.x |
-| Build Tool | Vite |
+| Spreadsheet engine | [Univer](https://univer.ai) 0.25.x |
+| XLS/XLSX/CSV I/O | [SheetJS (`@stackline/xlsx`)](https://sheetjs.com) |
+| Build | Vite |
 | Language | TypeScript |
-| XLSX I/O | [SheetJS (xlsx)](https://sheetjs.com) |
 
-## Development
+## 🧪 Development
 
 ```bash
-# Install dependencies
-npm install
-
-# Build for production
-npm run build
-
-# Watch mode (development)
-npm run dev
+npm install        # install dependencies
+npm run build      # production build
+npm run dev        # watch mode (for development)
+npm test           # run unit tests
 ```
 
-Built files are output to `dist/main.js`, `dist/styles.css`, and `dist/manifest.json`, and are automatically copied back to the project root.
+Build output: `main.js`, `manifest.json`, `styles.css` (copied to project root).
 
-## Credits
+## 🙏 Credits
 
-- [Univer](https://github.com/dream-num/univer) — The underlying spreadsheet engine
-- [SheetJS](https://sheetjs.com) — XLSX import/export support
-- [Obsidian](https://obsidian.md) — The note-taking app that makes this possible
+- [Univer](https://github.com/dream-num/univer) — the underlying spreadsheet engine
+- [SheetJS](https://sheetjs.com) — XLSX/XLS/CSV import/export
+- [Obsidian](https://obsidian.md) — the note-taking app that makes this possible
 
-## License
+## 📄 License
 
 [MIT](LICENSE)
