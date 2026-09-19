@@ -15,10 +15,11 @@ import { FolderIcon, ExportIcon, LinkIcon } from '@univerjs/icons';
 import { AddHyperLinkCommand } from '@univerjs/sheets-hyper-link';
 import type { FUniver } from '@univerjs/core/facade';
 import type { IWorkbookData } from '@univerjs/core';
-import { xlsxToWorkbookData, workbookDataToXlsx, csvToWorkbookData, workbookDataToCsv } from './xlsx-converter';
+import { xlsxToWorkbookData, workbookDataToXlsx, csvToWorkbookData, workbookDataToCsv, type WorkbookExportFormat } from './xlsx-converter';
 import type { App, TFile } from 'obsidian';
 
 type OnImportCallback = (data: IWorkbookData) => void;
+type WorkbookFormat = 'xlsx' | 'xls' | 'csv';
 
 // Injector cannot be referenced by name (TS2709: @wendellhu/redi resolves it as a
 // namespace under 'bundler' resolution), and typescript-eslint resolves it to an
@@ -39,17 +40,19 @@ export function setupImportExport(
   componentManager.register('ExportXlsxIcon', ExportIcon);
   componentManager.register('OutgoingLinkIcon', LinkIcon);
 
-  const importCommandId = 'excel.import-xlsx';
-  const exportCommandId = 'excel.export-xlsx';
-  const importCsvCommandId = 'excel.import-csv';
-  const exportCsvCommandId = 'excel.export-csv';
+  const importXlsxCommandId = 'excel.import.xlsx';
+  const importXlsCommandId = 'excel.import.xls';
+  const importCsvCommandId = 'excel.import.csv';
+  const exportXlsxCommandId = 'excel.export.xlsx';
+  const exportXlsCommandId = 'excel.export.xls';
+  const exportCsvCommandId = 'excel.export.csv';
   const addOutgoingLinkId = 'excel.add-outgoing-link';
   const addEmbedLinkId = 'excel.add-embed-link';
 
-  const handleImport = () => {
+  const handleImport = (format: WorkbookFormat) => {
     const input = activeWindow.createEl('input');
     input.type = 'file';
-    input.accept = '.xlsx,.xls';
+    input.accept = `.${format}`;
     input.click();
 
     input.onchange = async () => {
@@ -57,115 +60,96 @@ export function setupImportExport(
       if (!file) return;
 
       try {
-        const buffer = await file.arrayBuffer();
-        const workbookData = xlsxToWorkbookData(buffer, file.name.replace(/\.xlsx?$/i, ''));
+        let workbookData: IWorkbookData;
+        const baseName = file.name.replace(/\.(xlsx|xls|csv)$/i, '');
+
+        if (format === 'csv') {
+          const text = await file.text();
+          workbookData = csvToWorkbookData(text, baseName);
+        } else {
+          const buffer = await file.arrayBuffer();
+          workbookData = xlsxToWorkbookData(buffer, baseName);
+        }
         onImport(workbookData);
       } catch (err) {
-        console.error('Import xlsx error:', err);
+        console.error(`Import ${format} error:`, err);
       }
     };
   };
 
-  const handleExport = () => {
+  const handleExport = (format: WorkbookFormat) => {
     const activeWorkbook = univerAPI.getActiveWorkbook();
     if (!activeWorkbook) return;
 
     try {
       const workbookData = activeWorkbook.save();
-      const buffer = workbookDataToXlsx(workbookData);
 
-      const blob = new Blob([buffer], {
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      });
-      const url = URL.createObjectURL(blob);
-      const a = activeWindow.createEl('a');
-      a.href = url;
-      a.download = 'export.xlsx';
-      activeDocument.body.appendChild(a);
-      a.click();
-      activeDocument.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error('Export xlsx error:', err);
-    }
-  };
+      let blob: Blob;
+      let fileName: string;
+      let mime: string;
 
-  const handleImportCsv = () => {
-    const input = activeWindow.createEl('input');
-    input.type = 'file';
-    input.accept = '.csv';
-    input.click();
-
-    input.onchange = async () => {
-      const file = input.files?.[0];
-      if (!file) return;
-
-      try {
-        const text = await file.text();
-        const workbookData = csvToWorkbookData(text, file.name.replace(/\.csv$/i, ''));
-        onImport(workbookData);
-      } catch (err) {
-        console.error('Import csv error:', err);
+      if (format === 'csv') {
+        const csvString = workbookDataToCsv(workbookData);
+        blob = new Blob([csvString], { type: 'text/csv;charset=utf-8' });
+        fileName = 'export.csv';
+        mime = 'text/csv;charset=utf-8';
+      } else {
+        const exportFormat: WorkbookExportFormat = format; // 'xlsx' | 'xls'
+        const buffer = workbookDataToXlsx(workbookData, exportFormat);
+        const ext = format === 'xls' ? 'xls' : 'xlsx';
+        blob = new Blob([buffer], {
+          type: ext === 'xls'
+            ? 'application/vnd.ms-excel'
+            : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        });
+        fileName = `export.${ext}`;
+        mime = blob.type; // unused fallback
       }
-    };
-  };
 
-  const handleExportCsv = () => {
-    const activeWorkbook = univerAPI.getActiveWorkbook();
-    if (!activeWorkbook) return;
-
-    try {
-      const workbookData = activeWorkbook.save();
-      const csvString = workbookDataToCsv(workbookData);
-
-      const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8' });
+      void mime; // silence noUnusedLocals for csv/xlsx mimes
       const url = URL.createObjectURL(blob);
       const a = activeWindow.createEl('a');
       a.href = url;
-      a.download = 'export.csv';
+      a.download = fileName;
       activeDocument.body.appendChild(a);
       a.click();
       activeDocument.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (err) {
-      console.error('Export csv error:', err);
+      console.error(`Export ${format} error:`, err);
     }
   };
 
-  const importCommand: ICommand = {
+  const importXlsxCommand: ICommand = {
     type: CommandType.OPERATION,
-    id: importCommandId,
-    handler: () => {
-      handleImport();
-      return true;
-    },
+    id: importXlsxCommandId,
+    handler: () => { handleImport('xlsx'); return true; },
   };
-
-  const exportCommand: ICommand = {
+  const importXlsCommand: ICommand = {
     type: CommandType.OPERATION,
-    id: exportCommandId,
-    handler: () => {
-      handleExport();
-      return true;
-    },
+    id: importXlsCommandId,
+    handler: () => { handleImport('xls'); return true; },
   };
-
   const importCsvCommand: ICommand = {
     type: CommandType.OPERATION,
     id: importCsvCommandId,
-    handler: () => {
-      handleImportCsv();
-      return true;
-    },
+    handler: () => { handleImport('csv'); return true; },
   };
 
+  const exportXlsxCommand: ICommand = {
+    type: CommandType.OPERATION,
+    id: exportXlsxCommandId,
+    handler: () => { handleExport('xlsx'); return true; },
+  };
+  const exportXlsCommand: ICommand = {
+    type: CommandType.OPERATION,
+    id: exportXlsCommandId,
+    handler: () => { handleExport('xls'); return true; },
+  };
   const exportCsvCommand: ICommand = {
     type: CommandType.OPERATION,
     id: exportCsvCommandId,
-    handler: () => {
-      handleExportCsv();
-      return true;
-    },
+    handler: () => { handleExport('csv'); return true; },
   };
 
   const addOutgoingLinkCommand: ICommand = {
@@ -186,53 +170,45 @@ export function setupImportExport(
     },
   };
 
-  commandService.registerCommand(importCommand);
-  commandService.registerCommand(exportCommand);
+  commandService.registerCommand(importXlsxCommand);
+  commandService.registerCommand(importXlsCommand);
   commandService.registerCommand(importCsvCommand);
+  commandService.registerCommand(exportXlsxCommand);
+  commandService.registerCommand(exportXlsCommand);
   commandService.registerCommand(exportCsvCommand);
   commandService.registerCommand(addOutgoingLinkCommand);
   commandService.registerCommand(addEmbedLinkCommand);
 
   menuManagerService.mergeMenu({
     [RibbonOthersGroup.OTHERS]: {
-      [importCommandId]: {
+      [importXlsxCommandId]: {
         order: 10,
         menuItemFactory: () => ({
-          id: importCommandId,
-          title: 'importXlsx',
-          tooltip: 'importXlsx',
+          id: importXlsxCommandId,
+          title: 'IMPORT',
+          tooltip: 'IMPORT',
           icon: 'FolderOpenIcon',
-          type: MenuItemType.BUTTON,
+          type: MenuItemType.BUTTON_SELECTOR,
+          selections: [
+            { id: importXlsxCommandId, commandId: importXlsxCommandId, label: { name: 'FORMAT_XLSX', selectable: false }, value: 'xlsx' },
+            { id: importXlsCommandId, commandId: importXlsCommandId, label: { name: 'FORMAT_XLS', selectable: false }, value: 'xls' },
+            { id: importCsvCommandId, commandId: importCsvCommandId, label: { name: 'FORMAT_CSV', selectable: false }, value: 'csv' },
+          ],
         }),
       },
-      [exportCommandId]: {
+      [exportXlsxCommandId]: {
         order: 11,
         menuItemFactory: () => ({
-          id: exportCommandId,
-          title: 'exportXlsx',
-          tooltip: 'exportXlsx',
+          id: exportXlsxCommandId,
+          title: 'EXPORT',
+          tooltip: 'EXPORT',
           icon: 'ExportXlsxIcon',
-          type: MenuItemType.BUTTON,
-        }),
-      },
-      [importCsvCommandId]: {
-        order: 12,
-        menuItemFactory: () => ({
-          id: importCsvCommandId,
-          title: 'importCsv',
-          tooltip: 'importCsv',
-          icon: 'FolderOpenIcon',
-          type: MenuItemType.BUTTON,
-        }),
-      },
-      [exportCsvCommandId]: {
-        order: 13,
-        menuItemFactory: () => ({
-          id: exportCsvCommandId,
-          title: 'exportCsv',
-          tooltip: 'exportCsv',
-          icon: 'ExportXlsxIcon',
-          type: MenuItemType.BUTTON,
+          type: MenuItemType.BUTTON_SELECTOR,
+          selections: [
+            { id: exportXlsxCommandId, commandId: exportXlsxCommandId, label: { name: 'FORMAT_XLSX', selectable: false }, value: 'xlsx' },
+            { id: exportXlsCommandId, commandId: exportXlsCommandId, label: { name: 'FORMAT_XLS', selectable: false }, value: 'xls' },
+            { id: exportCsvCommandId, commandId: exportCsvCommandId, label: { name: 'FORMAT_CSV', selectable: false }, value: 'csv' },
+          ],
         }),
       },
     },
@@ -266,9 +242,11 @@ export function setupImportExport(
 
   return () => {
     try {
-      commandService.unregisterCommand(importCommandId);
-      commandService.unregisterCommand(exportCommandId);
+      commandService.unregisterCommand(importXlsxCommandId);
+      commandService.unregisterCommand(importXlsCommandId);
       commandService.unregisterCommand(importCsvCommandId);
+      commandService.unregisterCommand(exportXlsxCommandId);
+      commandService.unregisterCommand(exportXlsCommandId);
       commandService.unregisterCommand(exportCsvCommandId);
       commandService.unregisterCommand(addOutgoingLinkId);
       commandService.unregisterCommand(addEmbedLinkId);

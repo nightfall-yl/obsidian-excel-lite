@@ -4,6 +4,17 @@
 
 > 说明：本更新日志自 `26.1.1` 起维护。
 
+## [26.1.2] - 2026-09-19
+
+### 新功能
+
+- **新增 `.xls`（Excel 97-2003）格式导入与导出支持。** SheetJS 后端已原生支持 BIFF8 二进制格式，`xlsx-converter.ts` 新增 `WorkbookExportFormat` 类型，`workbookDataToXlsx()` 接受格式参数，导入通过文件扩展名自动走同一条 SheetJS 解码路径。
+- **导入 / 导出按钮合并为下拉菜单。** 原工具栏 4 个独立按钮（Import XLSX、Export XLSX、Import CSV、Export CSV）收敛为 2 个 `BUTTON_SELECTOR` 下拉：导入菜单提供 `.xlsx` / `.xls` / `.csv` 三选一，导出菜单同理。命令 ID 同步细化为 `excel.{import,export}.{xlsx,xls,csv}`，i18n 补齐中英双语条目。
+
+### 工程与代码质量
+
+- **升级版本号至 `26.1.2`**，构建同步更新 `manifest.json`。
+
 ## [26.1.1] - 2026-09-06
 
 ### 问题修复

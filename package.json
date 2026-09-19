@@ -1,6 +1,6 @@
 {
   "name": "excel-lite",
-  "version": "26.1.1",
+  "version": "26.1.2",
   "description": "Free Excel-like spreadsheet plugin with xlsx import/export, based on Univer.",
   "main": "main.js",
   "type": "module",

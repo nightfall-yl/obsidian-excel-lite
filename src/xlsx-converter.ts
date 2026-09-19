@@ -307,7 +307,10 @@ export function xlsxToWorkbookData(buffer: ArrayBuffer, fileName: string): IWork
   };
 }
 
-export function workbookDataToXlsx(data: IWorkbookData): ArrayBuffer {
+/** Supported binary workbook formats for Univer → xlsx-converter output. */
+export type WorkbookExportFormat = 'xlsx' | 'xls';
+
+export function workbookDataToXlsx(data: IWorkbookData, format: WorkbookExportFormat = 'xlsx'): ArrayBuffer {
   const wb = XLSX.utils.book_new();
   const styles = data.styles || {};
   const sheetOrder = data.sheetOrder || Object.keys(data.sheets || {});
@@ -422,7 +425,7 @@ export function workbookDataToXlsx(data: IWorkbookData): ArrayBuffer {
     XLSX.utils.book_append_sheet(wb, ws, sheet.name || 'Sheet1');
   }
 
-  const buf: ArrayBuffer = XLSX.write(wb, { type: 'array', bookType: 'xlsx', cellStyles: true }) as ArrayBuffer;
+  const buf: ArrayBuffer = XLSX.write(wb, { type: 'array', bookType: format, cellStyles: true }) as ArrayBuffer;
   return buf;
 }
 

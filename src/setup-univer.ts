@@ -115,6 +115,11 @@ const zhCNLocale = mergeLocalDicts(
     exportXlsx: '导出 xlsx',
     addOutgoingLink: '添加内链',
     addEmbedLink: '生成嵌入链接',
+    IMPORT: '导入',
+    EXPORT: '导出',
+    FORMAT_XLSX: 'Excel (.xlsx)',
+    FORMAT_XLS: 'Excel 97-2003 (.xls)',
+    FORMAT_CSV: 'CSV (.csv)',
   },
 );
 
@@ -141,6 +146,11 @@ const enUSLocale = mergeLocalDicts(
     exportXlsx: 'Export xlsx',
     addOutgoingLink: 'Add internal link',
     addEmbedLink: 'Generate embed link',
+    IMPORT: 'Import',
+    EXPORT: 'Export',
+    FORMAT_XLSX: 'Excel (.xlsx)',
+    FORMAT_XLS: 'Excel 97-2003 (.xls)',
+    FORMAT_CSV: 'CSV (.csv)',
   },
 );
 
