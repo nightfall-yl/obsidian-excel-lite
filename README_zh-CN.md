@@ -3,7 +3,8 @@
 > 基于 [Univer](https://github.com/dream-num/univer) 的轻量级 Obsidian 电子表格插件。
 
 [![Version](https://img.shields.io/badge/version-26.1.3-blue)](https://github.com/nightfall-yl/obsidian-excel-lite) | [![Obsidian](https://img.shields.io/badge/Obsidian-1.11.0%2B-purple)](https://obsidian.md) | [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-中文 | [English](README.md)
+
+简体中文 | [English](README.md)
 
 ## ✨ 功能特性
 
