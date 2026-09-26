@@ -4,7 +4,7 @@ A lightweight, fully-featured spreadsheet plugin for Obsidian, powered by [Unive
 
 [![Version](https://img.shields.io/badge/version-26.1.3-blue)](https://github.com/nightfall-yl/obsidian-excel-lite) | [![Obsidian](https://img.shields.io/badge/Obsidian-1.11.0%2B-purple)](https://obsidian.md) | [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-[简体中文](README_zh-CN.md) | English
+English | [简体中文](README_zh-CN.md)
 
 ## ✨ Features
 
