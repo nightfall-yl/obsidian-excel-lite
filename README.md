@@ -2,7 +2,7 @@
 
 A lightweight, fully-featured spreadsheet plugin for Obsidian, powered by [Univer](https://github.com/dream-num/univer).
 
-[![Version](https://img.shields.io/badge/version-26.1.3-blue)](https://github.com/nightfall-yl/obsidian-excel-lite) | [![Obsidian](https://img.shields.io/badge/Obsidian-1.11.0%2B-purple)](https://obsidian.md) | [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![Version](https://img.shields.io/github/v/release/nightfall-yl/obsidian-excel-lite?sort=semver)](https://github.com/nightfall-yl/obsidian-excel-lite) | [![Obsidian](https://img.shields.io/badge/Obsidian-1.11.0%2B-purple)](https://obsidian.md) | [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 English | [简体中文](README_zh-CN.md)
 
