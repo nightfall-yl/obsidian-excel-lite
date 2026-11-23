@@ -277,8 +277,6 @@ export function registerEmbedLinkProcessor(plugin: EmbedPlugin): void {
   });
 
   const processor = async (el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
-    const internalEmbeds = el.querySelectorAll('.internal-embed');
-
     // Obsidian's runtime context also exposes containerEl / remainingNestLevel even
     // though they are not fully reflected in the shipped typings. Bridge them into the
     // internal ProcessorContext that downstream helpers rely on.
@@ -290,12 +288,20 @@ export function registerEmbedLinkProcessor(plugin: EmbedPlugin): void {
       remainingNestLevel: rawCtx.remainingNestLevel as number,
     };
 
-    if (internalEmbeds.length === 0) {
-      await processEditMode(el, processorCtx, plugin);
-      return;
+    // 收集两种嵌入容器：
+    // .internal-embed  → 阅读视图 / 已渲染完成的嵌入
+    // .cm-embed-block  → 编辑视图 (Live Preview) 中的 CodeMirror 嵌入块
+    const internalEmbeds = el.querySelectorAll('.internal-embed');
+    const cmEmbeds = el.querySelectorAll('.cm-embed-block');
+
+    const allEmbeds: Element[] = [...internalEmbeds, ...cmEmbeds];
+
+    if (allEmbeds.length > 0) {
+      await processEmbedBlocks(allEmbeds, processorCtx, plugin);
     }
 
-    await processReadingMode(internalEmbeds, processorCtx, plugin);
+    // 编辑视图下，当前文件本身是 sheet 文件的场景
+    await processEditMode(el, processorCtx, plugin);
   };
 
   plugin.registerMarkdownPostProcessor(processor);
@@ -314,7 +320,6 @@ async function processEditMode(el: HTMLElement, ctx: ProcessorContext, plugin: E
   while (
     !embedDiv.hasClass('dataview')
     && !embedDiv.hasClass('cm-preview-code-block')
-    && !embedDiv.hasClass('cm-embed-block')
     && !embedDiv.hasClass('internal-embed')
     && !embedDiv.hasClass('markdown-reading-view')
     && !embedDiv.hasClass('markdown-embed')
@@ -326,7 +331,6 @@ async function processEditMode(el: HTMLElement, ctx: ProcessorContext, plugin: E
   if (
     embedDiv.hasClass('dataview')
     || embedDiv.hasClass('cm-preview-code-block')
-    || embedDiv.hasClass('cm-embed-block')
   ) {
     return;
   }
@@ -384,12 +388,29 @@ async function processEditMode(el: HTMLElement, ctx: ProcessorContext, plugin: E
   }
 }
 
-async function processReadingMode(internalEmbeds: NodeListOf<Element>, ctx: ProcessorContext, plugin: EmbedPlugin): Promise<void> {
-  for (const embedEl of Array.from(internalEmbeds)) {
-    const src = embedEl.getAttribute('src') || '';
-    const alt = embedEl.getAttribute('alt') || '';
+async function processEmbedBlocks(embeds: Element[], ctx: ProcessorContext, plugin: EmbedPlugin): Promise<void> {
+  for (const embedEl of embeds) {
+    const embedHTMLEl = embedEl as HTMLElement;
 
-    if ((embedEl as HTMLElement).hasClass?.('excel-embed-file-label')) continue;
+    // 跳过已处理的元素
+    if (embedHTMLEl.hasAttribute?.('excel-ready')) continue;
+    if (embedHTMLEl.hasClass?.('excel-embed-file-label')) continue;
+
+    // 获取嵌入目标的 src 和 alt
+    // 优先从容器自身取，.cm-embed-block 可能没有 src 属性时，尝试从 Obsidian 渲染的子元素里取
+    let src = embedEl.getAttribute('src') || '';
+    let alt = embedEl.getAttribute('alt') || '';
+
+    // fallback：如果 .cm-embed-block 自身没有 src，检查子元素
+    if (!src && embedHTMLEl.hasClass?.('cm-embed-block')) {
+      const childWithSrc = embedHTMLEl.querySelector('[src]');
+      if (childWithSrc) {
+        src = childWithSrc.getAttribute('src') || '';
+        alt = childWithSrc.getAttribute('alt') || '';
+      }
+    }
+
+    if (!src) continue;
     if (!isSheetEmbed(src, alt, plugin, ctx.sourcePath)) continue;
 
     const targetFile = resolveSheetFile(src, plugin, ctx.sourcePath);
@@ -398,7 +419,18 @@ async function processReadingMode(internalEmbeds: NodeListOf<Element>, ctx: Proc
     try {
       const data = await plugin.app.vault.read(targetFile);
       const sheetDiv = await createEmbedLinkDiv(src, alt, targetFile, data, plugin, ctx);
-      embedEl.replaceWith(sheetDiv);
+
+      // dblclick 跳转监听已在 createEmbedLinkDiv 中绑定到 sheetDiv 本身，
+      // 无论最终哪个实例可见（processEditMode 可能重建容器内容），监听都跟随实例。
+      // 根据容器类型选择替换策略
+      if (embedHTMLEl.hasClass?.('cm-embed-block')) {
+        // CodeMirror 嵌入块：清空内容后追加
+        embedHTMLEl.empty();
+        embedHTMLEl.appendChild(sheetDiv);
+      } else {
+        // 阅读视图 / Live Preview widget：直接 replaceWith
+        embedEl.replaceWith(sheetDiv);
+      }
     } catch (e) {
       console.error('Excel: embed link render error:', e);
     }
@@ -430,6 +462,15 @@ async function createEmbedLinkDiv(
 
   const container = activeWindow.createDiv();
   container.className = 'excel-embed-container';
+
+  // 双击跳转到源文件。监听绑定在实例自身：Live Preview 中 markdown 后处理器
+  // 在游离片段上运行（此时不存在 .cm-embed-block），且 processEditMode 可能
+  // 清空容器重建内容，只有绑定实例才能保证最终可见的表格始终可双击跳转。
+  container.addEventListener('dblclick', (event: MouseEvent) => {
+    // 文件名标签单击即跳转，双击时避免重复打开
+    if ((event.target as HTMLElement | null)?.closest?.('.excel-embed-file-label')) return;
+    void plugin.app.workspace.openLinkText(file.path, '', 'split');
+  }, true);
 
   const effectiveHeight = parseResult.height ?? plugin.settings.embedTableHeight;
 
