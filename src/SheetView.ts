@@ -143,8 +143,8 @@ export class SheetView extends TextFileView {
 
     // 显式设置焦点单元：修复 ribbon 查找替换按钮永久置灰（见 setup-univer.focusSheetUnit 注释）。
     // 注意：isMobilePreviewMode 是移动端预览/编辑开关（桌面端恒为 true，无意义），
-    // 不能用作桌面判断条件
-    if (!this.isMobile) {
+    // 不能用作桌面判断条件；isMobile 是 renderUniver 局部变量（SheetView 无此实例字段）
+    if (!isMobile) {
       focusSheetUnit(univer, univerAPI);
     }
 

@@ -223,6 +223,19 @@ function getRangeWorkbookData(
   return data;
 }
 
+// 不带单元格范围的嵌入：按 sheetName 只保留指定工作表（#工作表2 只渲染工作表2，
+// 而不是整个工作簿默认显示第一个工作表）。无 sheetName 或找不到同名表时保持整簿。
+function getSheetWorkbookData(workbookData: IWorkbookData, sheetName: string): IWorkbookData {
+  const data = cloneWorkbookData(workbookData);
+  if (!sheetName) return data;
+  const sheet = findSheet(data, sheetName);
+  const sheetId = sheet?.id;
+  if (!sheetId) return data;
+  data.sheets = { [sheetId]: sheet };
+  data.sheetOrder = [sheetId];
+  return data;
+}
+
 // 从 workspace leaves 定位元素所属的 CodeMirror EditorView。
 // 说明：CM6 的内部属性 cmView 在部分 Obsidian 版本上不可用（运行时证据：
 // viewFound 始终为 false），改用 leaf.view.editor.cm —— Obsidian 插件的
@@ -710,7 +723,7 @@ async function createEmbedLinkDiv(
 
   const embedWorkbookData = parseResult.startCell && parseResult.endCell
     ? getRangeWorkbookData(workbookData, parseResult.sheetName, parseResult.startCell, parseResult.endCell)
-    : cloneWorkbookData(workbookData);
+    : getSheetWorkbookData(workbookData, parseResult.sheetName);
   const { el: univerEl, rebuild } = createUniverEmbedElement(
     embedWorkbookData,
     effectiveHeight,
@@ -740,7 +753,7 @@ async function createEmbedLinkDiv(
       if (!parsed || !parsed.sheets || Object.keys(parsed.sheets).length === 0) return;
       const wb = parseResult.startCell && parseResult.endCell
         ? getRangeWorkbookData(parsed, parseResult.sheetName, parseResult.startCell, parseResult.endCell)
-        : cloneWorkbookData(parsed);
+        : getSheetWorkbookData(parsed, parseResult.sheetName);
       rebuild(wb);
       container.removeClass('excel-embed-stale');
     } catch (e) {
