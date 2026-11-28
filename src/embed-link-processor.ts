@@ -1,10 +1,12 @@
 import type { IWorkbookData, IWorksheetData, ICellData } from '@univerjs/core';
 import { BooleanNumber, LifecycleStages } from '@univerjs/core';
 import type { Plugin } from 'obsidian';
-import { MarkdownPostProcessorContext, MarkdownRenderChild, Platform, TFile } from 'obsidian';
+import { MarkdownPostProcessorContext, MarkdownRenderChild, Platform, TFile, WorkspaceLeaf } from 'obsidian';
 import { parseSheetFile } from './data-utils';
+import { VIEW_TYPE_SHEET } from './constants';
 import { SHEET_FRONTMATTER_KEYS } from './constants';
 import { createUniverInstance } from './setup-univer';
+import { t } from './i18n';
 
 interface EmbedPlugin extends Plugin {
   isSheetFile(file: TFile): boolean;
@@ -14,6 +16,28 @@ interface EmbedPlugin extends Plugin {
     showJumpToOriginal: boolean;
     showEmbedBottomContent: boolean;
   };
+}
+
+// 每个窗口文档只注册一次的 mousedown 捕获守卫：单击嵌入表格时取消默认行为。
+// 单击嵌入表格会使编辑器获得焦点，CodeMirror 随即 scrollIntoView 到当前选区
+// （通常在文档开头），表现为文档跳转到开头；CM 只尊重 defaultPrevented，
+// 冒泡阶段 stopPropagation 拦不住其祖先层处理器，必须在文档捕获阶段
+// preventDefault。注意弹出窗口是独立 document，监听必须注册在容器所属的
+// window 文档上（activeWindow），而非主窗口。
+const mousedownGuardDocs = new WeakMap<Document, boolean>();
+function registerEmbedMousedownGuard(plugin: EmbedPlugin, doc: Document): void {
+  if (mousedownGuardDocs.has(doc)) return;
+  mousedownGuardDocs.set(doc, true);
+  plugin.registerDomEvent(
+    doc,
+    'mousedown',
+    (e: MouseEvent) => {
+      if ((e.target as HTMLElement | null)?.closest?.('.excel-embed-container')) {
+        e.preventDefault();
+      }
+    },
+    true,
+  );
 }
 
 interface ProcessorContext {
@@ -199,13 +223,48 @@ function getRangeWorkbookData(
   return data;
 }
 
+// 从 workspace leaves 定位元素所属的 CodeMirror EditorView。
+// 说明：CM6 的内部属性 cmView 在部分 Obsidian 版本上不可用（运行时证据：
+// viewFound 始终为 false），改用 leaf.view.editor.cm —— Obsidian 插件的
+// 标准访问方式，通过编辑器 DOM 包含关系匹配。
+function findEditorView(
+  plugin: EmbedPlugin,
+  el: HTMLElement,
+): { requestMeasure?: () => void } | null {
+  let found: { requestMeasure?: () => void } | null = null;
+  try {
+    plugin.app.workspace.iterateAllLeaves((leaf) => {
+      if (found) return;
+      const cm = (leaf.view as unknown as {
+        editor?: { cm?: { dom?: HTMLElement } & { requestMeasure?: () => void } };
+      }).editor?.cm;
+      if (cm?.dom?.contains(el)) found = cm;
+    });
+  } catch { /* ignore */ }
+  return found;
+}
+
+// 让 CodeMirror 立即重测视口高度。Live Preview 的嵌入块 widget 先以空内容
+// 插入并被 CM 测量（约一行高），表格内容是异步填充的且 CM 感知不到 widget
+// 内部的高度变化，其高度地图停留在旧值；此后 CM 为光标做 scrollIntoView
+// 时按过期几何计算，长笔记中插入表格后光标被算到比实际高约一个表格高度
+// 的位置，页面随之向上跳（运行时证据：scrollTop 1687.5→655，差值恰为
+// 表格高度）。填充完成后主动 requestMeasure 让 CM 在光标仍处于插入点时
+// 重测并正确锚定。阅读视图无编辑器，自然跳过。
+function requestEditorMeasure(el: HTMLElement, plugin: EmbedPlugin): void {
+  const view = findEditorView(plugin, el);
+  try {
+    view?.requestMeasure?.();
+  } catch { /* 测量失败不影响渲染 */ }
+}
+
 function createUniverEmbedElement(
   workbookData: IWorkbookData,
   height: number,
   showFooter: boolean,
   plugin: EmbedPlugin,
   ctx: ProcessorContext,
-): HTMLDivElement {
+): { el: HTMLDivElement; rebuild: (wb: IWorkbookData) => void } {
   const embedEl = activeWindow.createDiv();
   embedEl.className = 'excel-embed-univer';
   embedEl.style.height = `${height}px`;
@@ -223,12 +282,29 @@ function createUniverEmbedElement(
     }
   };
 
-  const observer = new MutationObserver(() => {
-    if (disposed) return;
-    if (!activeDocument.body.contains(embedEl)) return;
+  // 滚动守护：锚点为"当前挂载/刷新时刻"的滚动位置。锚点必须随每次挂载、
+  // 每次过期刷新重新捕获——若沿用旧锚点，Rendered 时的守护会把页面拉回
+  // 旧位置（表现为刷新后向上滑动）。
+  let scrollerEl: HTMLElement | null = null;
+  let savedScrollTop: number | null = null;
+  let guardScroll: () => void = () => {};
 
-    observer.disconnect();
+  const initScrollGuard = (): void => {
+    scrollerEl = embedEl.closest('.cm-scroller') as HTMLElement | null;
+    savedScrollTop = scrollerEl ? scrollerEl.scrollTop : null;
+    guardScroll = () => {
+      if (disposed || !scrollerEl || savedScrollTop === null) return;
+      const cur = scrollerEl.scrollTop;
+      if (Math.abs(cur - savedScrollTop) > 100) {
+        scrollerEl.scrollTop = savedScrollTop;
+      }
+    };
+  };
 
+  // 用给定的工作簿数据初始化 Univer 实例（首次挂载与过期刷新共用）
+
+  // 用给定的工作簿数据初始化 Univer 实例（首次挂载与过期刷新共用）
+  const initUniver = (wb: IWorkbookData): void => {
     const isDark = plugin.app.isDarkMode?.() ?? activeDocument.body.hasClass?.('theme-dark') ?? false;
     const { univerAPI, univer } = createUniverInstance(embedEl, isDark, plugin.app, !Platform.isDesktopApp, {
       header: false,
@@ -248,9 +324,28 @@ function createUniverEmbedElement(
       } catch (e) { console.warn('[excel-lite] dispose univer instance failed:', e); }
     };
 
-    const workbook = univerAPI.createWorkbook(workbookData);
+    const workbook = univerAPI.createWorkbook(wb);
+    // 权限弹窗在首次渲染时可能抢在 Rendered 事件之前弹出（偶发浮窗），
+    // 创建工作簿后立即隐藏一次，Rendered 时再兜底
+    try {
+      univerAPI.setPermissionDialogVisible(false);
+    } catch (e) { console.warn('[excel-lite] hide permission dialog failed:', e); }
+    // 冷启动时权限服务晚于上述调用才挂载弹窗组件，定点隐藏会扑空；
+    // 在初始化窗口内多次补隐藏，确保弹窗挂载后随即被关闭
+    [100, 300, 600, 1000].forEach((delay) => {
+      window.setTimeout(() => {
+        if (disposed) return;
+        try {
+          univerAPI.setPermissionDialogVisible(false);
+        } catch { /* ignore */ }
+      }, delay);
+    });
     lifecycleDisposable = univerAPI.addEvent(univerAPI.Event.LifeCycleChanged, (event: unknown) => {
       if ((event as { stage: LifecycleStages }).stage !== LifecycleStages.Rendered) return;
+
+      // 表格渲染落定后再重测一次 + 守护复位，兜住渲染过程中的布局微调
+      requestEditorMeasure(embedEl, plugin);
+      guardScroll();
 
       try {
         const permission = workbook?.getWorkbookPermission?.();
@@ -258,6 +353,28 @@ function createUniverEmbedElement(
         univerAPI.setPermissionDialogVisible(false);
       } catch (e) { console.warn('[excel-lite] permission setup failed:', e); }
     });
+  };
+
+  const observer = new MutationObserver(() => {
+    if (disposed) return;
+    if (!activeDocument.body.contains(embedEl)) return;
+
+    observer.disconnect();
+
+    // 修正 CM 过期高度地图 + 守护式复位滚动。
+    // CM 在嵌入块 widget 填充的同一同步事务里按旧几何为光标 scrollIntoView，
+    // Obsidian 在渲染完成后还会再做一次 reveal 滚动（运行时证据：复位到
+    // 1687.5 后 Rendered 时又变回 655）。因此先 requestMeasure 修正高度地图，
+    // 立即复位一次，再在渲染窗口内的多个时间点守护：偏移超过 100px 才拉回，
+    // 避免干扰用户主动滚动。
+    initScrollGuard();
+    requestEditorMeasure(embedEl, plugin);
+    if (scrollerEl && savedScrollTop !== null) {
+      scrollerEl.scrollTop = savedScrollTop;
+    }
+    [150, 400, 800].forEach((delay) => window.setTimeout(guardScroll, delay));
+
+    initUniver(workbookData);
   });
 
   observer.observe(activeDocument.body, { childList: true, subtree: true });
@@ -268,7 +385,27 @@ function createUniverEmbedElement(
     }
   }(embedEl));
 
-  return embedEl;
+  // 用新数据原地重建 Univer 实例（源文件更新后的过期刷新）：
+  // 容器高度固定，重建不改变布局，重测一次高度地图即可。
+  // 锚点必须在 dispose 前重新捕获当前位置——沿用旧锚点会把页面拉回
+  // 首次挂载时的位置（即刷新后向上滑的原因）
+  const rebuild = (wb: IWorkbookData): void => {
+    if (disposed) return;
+    initScrollGuard();
+    if (disposeUniver) {
+      disposeUniver();
+      disposeUniver = null;
+    }
+    embedEl.empty();
+    initUniver(wb);
+    requestEditorMeasure(embedEl, plugin);
+    if (scrollerEl && savedScrollTop !== null) {
+      scrollerEl.scrollTop = savedScrollTop;
+    }
+    [150, 400, 800].forEach((delay) => window.setTimeout(guardScroll, delay));
+  };
+
+  return { el: embedEl, rebuild };
 }
 
 export function registerEmbedLinkProcessor(plugin: EmbedPlugin): void {
@@ -460,17 +597,71 @@ async function createEmbedLinkDiv(
     return div;
   }
 
+  // 悬浮预览弹层（hover-popover）内不渲染重型 Univer 实例：运行时证据表明
+  // 鼠标滑过嵌入链接触发的页面预览会在 .popover 中创建完整嵌入实例，形成
+  // 滞留的"浮窗"且开销高昂。改为轻量占位提示（与 Excalidraw 等插件策略一致）。
+  if (ctx.containerEl?.closest?.('.popover')) {
+    const placeholder = activeWindow.createDiv();
+    placeholder.className = 'excel-embed-popover-placeholder';
+    placeholder.textContent = t('EMBED_POPOVER_HINT');
+    return placeholder;
+  }
+
   const container = activeWindow.createDiv();
   container.className = 'excel-embed-container';
 
-  // 双击跳转到源文件。监听绑定在实例自身：Live Preview 中 markdown 后处理器
+  // 注册当前窗口文档的 mousedown 捕获守卫（见函数注释）
+  registerEmbedMousedownGuard(plugin, activeWindow.document);
+
+  // 阻止鼠标/键盘事件到达编辑器（CodeMirror）。冒泡阶段拦截：Univer 内部
+  // 元素先于本层收到事件，交互不受影响。wheel 必须额外 preventDefault——
+  // 浏览器滚动最近可滚动祖先是默认行为，stopPropagation 不影响默认行为。
+  const stopPropagation = (e: Event): void => {
+    if (e.type === 'wheel') e.preventDefault();
+    e.stopPropagation();
+  };
+  container.addEventListener('mousedown', stopPropagation);
+  container.addEventListener('pointerdown', stopPropagation);
+  container.addEventListener('click', stopPropagation);
+  container.addEventListener('wheel', stopPropagation, { passive: false });
+  container.addEventListener('keydown', stopPropagation);
+
+  // 快速双击跳转到源文件。监听绑定在实例自身：Live Preview 中 markdown 后处理器
   // 在游离片段上运行（此时不存在 .cm-embed-block），且 processEditMode 可能
   // 清空容器重建内容，只有绑定实例才能保证最终可见的表格始终可双击跳转。
-  container.addEventListener('dblclick', (event: MouseEvent) => {
-    // 文件名标签单击即跳转，双击时避免重复打开
+  // 跳转源文件：已有显示该 sheet 的视图时聚焦复用，否则才新开分屏，避免重复打开。
+  // 注意 .sheet.md 文件初始为 markdown 视图，加载后被换成 SheetView（excel-view），
+  // 因此两种 leaf 类型都要搜索。
+  const openSourceLeaf = (): void => {
+    const { workspace } = plugin.app;
+    const match = (leaf: WorkspaceLeaf): string | undefined =>
+      (leaf.view as { file?: TFile }).file?.path;
+    const existing = [...workspace.getLeavesOfType('markdown'), ...workspace.getLeavesOfType(VIEW_TYPE_SHEET)]
+      .find((leaf) => match(leaf) === file.path);
+    if (existing) {
+      workspace.setActiveLeaf(existing);
+      return;
+    }
+    void workspace.openLinkText(file.path, '', 'split');
+  };
+
+  // 浏览器原生 dblclick 判定间隔约 500ms，过慢；改用自定义判定：两次点击
+  // 间隔不超过 FAST_DOUBLE_CLICK_MS 才视为快速双击。监听绑定实例自身的理由同上。
+  const FAST_DOUBLE_CLICK_MS = 300;
+  let lastTableClickAt = 0;
+  container.addEventListener('click', (event: MouseEvent) => {
+    // 文件名标签单击即跳转（其监听已 stopPropagation，此处兜底排除）
     if ((event.target as HTMLElement | null)?.closest?.('.excel-embed-file-label')) return;
-    void plugin.app.workspace.openLinkText(file.path, '', 'split');
-  }, true);
+    // 仅编辑视图生效：阅读视图下快速双击不打开源文件
+    if (!container.closest('.cm-editor')) return;
+    const now = Date.now();
+    if (now - lastTableClickAt <= FAST_DOUBLE_CLICK_MS) {
+      lastTableClickAt = 0;
+      openSourceLeaf();
+      return;
+    }
+    lastTableClickAt = now;
+  });
 
   const effectiveHeight = parseResult.height ?? plugin.settings.embedTableHeight;
 
@@ -485,7 +676,7 @@ async function createEmbedLinkDiv(
     fileLabel.textContent = file.basename;
     fileLabel.addEventListener('click', (event: MouseEvent) => {
       event.stopPropagation();
-      void plugin.app.workspace.openLinkText(file.path, '', 'split');
+      openSourceLeaf();
     });
   }
 
@@ -520,7 +711,7 @@ async function createEmbedLinkDiv(
   const embedWorkbookData = parseResult.startCell && parseResult.endCell
     ? getRangeWorkbookData(workbookData, parseResult.sheetName, parseResult.startCell, parseResult.endCell)
     : cloneWorkbookData(workbookData);
-  const univerEl = createUniverEmbedElement(
+  const { el: univerEl, rebuild } = createUniverEmbedElement(
     embedWorkbookData,
     effectiveHeight,
     plugin.settings.showEmbedBottomContent,
@@ -528,6 +719,39 @@ async function createEmbedLinkDiv(
     ctx,
   );
   container.appendChild(univerEl);
+
+  // 过期指示器：源文件更新后提示并可一键原地刷新。
+  // 监听通过独立渲染子组件清理（CM 虚拟化会频繁销毁/重建 widget，
+  // EventRef 必须随实例生命周期注销，否则堆积泄漏）。
+  const staleBadge = container.createDiv({ cls: 'excel-embed-stale-badge' });
+  staleBadge.setText(t('EMBED_STALE'));
+  const staleRef = plugin.registerEvent(
+    plugin.app.vault.on('modify', (f) => {
+      if (f instanceof TFile && f.path === file.path) {
+        container.addClass('excel-embed-stale');
+      }
+    }),
+  );
+  staleBadge.addEventListener('click', async (event: MouseEvent) => {
+    event.stopPropagation();
+    try {
+      const fresh = await plugin.app.vault.read(file);
+      const parsed = parseSheetFile(fresh, file.path);
+      if (!parsed || !parsed.sheets || Object.keys(parsed.sheets).length === 0) return;
+      const wb = parseResult.startCell && parseResult.endCell
+        ? getRangeWorkbookData(parsed, parseResult.sheetName, parseResult.startCell, parseResult.endCell)
+        : cloneWorkbookData(parsed);
+      rebuild(wb);
+      container.removeClass('excel-embed-stale');
+    } catch (e) {
+      console.error('Excel: embed refresh error:', e);
+    }
+  });
+  ctx?.addChild?.(new class extends MarkdownRenderChild {
+    onunload(): void {
+      plugin.app.vault.offref(staleRef);
+    }
+  }(container));
 
   return container;
 }

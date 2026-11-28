@@ -88,7 +88,16 @@ export class SheetView extends TextFileView {
       }
 
       if (this.lastWorkbookData) {
-        this.data = workbookDataToMarkdown(this.lastWorkbookData);
+        const serialized = workbookDataToMarkdown(this.lastWorkbookData);
+        // 内容与已加载内容一致时跳过写盘：序列化往返并非字节恒等，
+        // 首次关闭视图时规范化写盘会触发 vault modify，导致其他笔记中
+        // 嵌入该文件的表格 widget 销毁重建，引发编辑视图滚动跳变。
+        // 同时避免无意义的 mtime 变更干扰同步工具。
+        if (serialized === this.data) {
+          this.isSaving = false;
+          return;
+        }
+        this.data = serialized;
       }
 
       await super.save();

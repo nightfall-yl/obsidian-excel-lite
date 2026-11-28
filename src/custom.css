@@ -218,10 +218,44 @@
 }
 
 .excel-embed-container {
+  position: relative;
   border: 1px solid var(--background-modifier-border);
   border-radius: 6px;
   overflow: hidden;
   margin: 8px 0;
+}
+
+.excel-embed-stale-badge {
+  display: none;
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 10;
+  padding: 2px 8px;
+  font-size: 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text-normal);
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  box-shadow: var(--shadow-s);
+}
+
+.excel-embed-stale-badge:hover {
+  color: var(--text-accent);
+}
+
+.excel-embed-container.excel-embed-stale .excel-embed-stale-badge {
+  display: inline-block;
+}
+
+.excel-embed-popover-placeholder {
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--background-secondary);
+  border: 1px dashed var(--background-modifier-border);
+  border-radius: 6px;
 }
 
 .excel-embed-univer {

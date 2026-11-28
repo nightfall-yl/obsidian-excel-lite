@@ -94,6 +94,23 @@ export default class ExcelPlugin extends Plugin {
       this.switchToSheetAfterLoad();
       registerEmbedLinkProcessor(this);
 
+      // 笔记右上角「更多选项」(...)菜单：sheet 文件可一键复制整表嵌入链接，
+      // 无需在表格内选中单元格再右键生成。链接不带范围段，嵌入时渲染整个表格。
+      this.registerEvent(
+        this.app.workspace.on('file-menu', (menu, file, source) => {
+          if (source !== 'more-options') return;
+          if (!(file instanceof TFile) || !this.isSheetFile(file)) return;
+          menu.addItem((item) => {
+            item
+              .setTitle(t('EMBED_LINK_FULL'))
+              .setIcon('link')
+              .onClick(() => {
+                void navigator.clipboard.writeText(`![[${file.path}]]`);
+              });
+          });
+        }),
+      );
+
       this.addSettingTab(new ExcelSettingTab(this, this.app));
     } catch (e) {
       const errStr = e instanceof Error ? `${e.message}\n${e.stack || ''}` : String(e);
