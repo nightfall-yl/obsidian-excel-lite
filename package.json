@@ -46,6 +46,7 @@
     "@univerjs/sheets-data-validation-ui": "0.25.2",
     "@univerjs/sheets-filter": "0.25.2",
     "@univerjs/sheets-filter-ui": "0.25.2",
+    "@univerjs/sheets-find-replace": "^0.25.2",
     "@univerjs/sheets-formula": "0.25.2",
     "@univerjs/sheets-formula-ui": "0.25.2",
     "@univerjs/sheets-hyper-link": "0.25.2",

@@ -3,7 +3,7 @@ import type { IWorkbookData, Univer } from '@univerjs/core';
 import { CommandType, LifecycleStages } from '@univerjs/core';
 import type { TFile, WorkspaceLeaf } from 'obsidian';
 import { Platform, TextFileView, debounce, Notice, setIcon } from 'obsidian';
-import { createUniverInstance } from './setup-univer';
+import { createUniverInstance, focusSheetUnit } from './setup-univer';
 import { parseSheetFile, workbookDataToMarkdown, createBlankSheetData } from './data-utils';
 import { BLANK_CONTENT, VIEW_TYPE_SHEET } from './constants';
 import { t } from './i18n';
@@ -140,6 +140,13 @@ export class SheetView extends TextFileView {
     this.univer = univer;
 
     univerAPI.createWorkbook(workbookData);
+
+    // 显式设置焦点单元：修复 ribbon 查找替换按钮永久置灰（见 setup-univer.focusSheetUnit 注释）。
+    // 注意：isMobilePreviewMode 是移动端预览/编辑开关（桌面端恒为 true，无意义），
+    // 不能用作桌面判断条件
+    if (!this.isMobile) {
+      focusSheetUnit(univer, univerAPI);
+    }
 
     univerAPI.addEvent(univerAPI.Event.LifeCycleChanged, (res: { stage: unknown }) => {
       if (res.stage === LifecycleStages.Rendered) {

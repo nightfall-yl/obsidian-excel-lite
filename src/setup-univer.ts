@@ -12,7 +12,7 @@ import '@univerjs/sheets-thread-comment-ui/lib/index.css';
 import '@univerjs/sheets-hyper-link-ui/lib/index.css';
 import '@univerjs/sheets-note-ui/lib/index.css';
 
-import { IAuthzIoService, ICommandService, LocaleService, LocaleType, LogLevel, merge, Univer, UserManagerService } from '@univerjs/core';
+import { IAuthzIoService, ICommandService, IUniverInstanceService, LocaleService, LocaleType, LogLevel, merge, Univer, UserManagerService } from '@univerjs/core';
 import type { ILanguagePack } from '@univerjs/core';
 import { FUniver } from '@univerjs/core/facade';
 import { defaultTheme } from '@univerjs/themes';
@@ -34,6 +34,7 @@ import { UniverSheetsFilterUIPlugin } from '@univerjs/sheets-filter-ui';
 import { UniverSheetsSortPlugin } from '@univerjs/sheets-sort';
 import { UniverSheetsSortUIPlugin } from '@univerjs/sheets-sort-ui';
 import { UniverFindReplacePlugin } from '@univerjs/find-replace';
+import { UniverSheetsFindReplacePlugin } from '@univerjs/sheets-find-replace';
 import { UniverThreadCommentPlugin } from '@univerjs/thread-comment';
 import { UniverThreadCommentUIPlugin } from '@univerjs/thread-comment-ui';
 import { UniverSheetsThreadCommentPlugin } from '@univerjs/sheets-thread-comment';
@@ -112,6 +113,7 @@ const zhCNLocale = mergeLocalDicts(
   sheetsNoteUiZhCN,
   {
     hyperLink: { menu: { add: '添加外链' } },
+    ui: { ribbon: { menu: '菜单' } },
     importXlsx: '导入 xlsx',
     exportXlsx: '导出 xlsx',
     addOutgoingLink: '添加内链',
@@ -143,6 +145,7 @@ const enUSLocale = mergeLocalDicts(
   sheetsNoteUiEnUS,
   {
     hyperLink: { menu: { add: 'Add external link' } },
+    ui: { ribbon: { menu: 'Menu' } },
     importXlsx: 'Import xlsx',
     exportXlsx: 'Export xlsx',
     addOutgoingLink: 'Add internal link',
@@ -163,6 +166,24 @@ export function getObsidianLocale(): LocaleType {
       return LocaleType.ZH_CN;
     default:
       return LocaleType.EN_US;
+  }
+}
+
+/**
+ * 显式设置工作簿为当前焦点单元（focusUnit）。
+ * 上游 UniverSheetsUIPlugin 的 autofocus 依赖无重放的 Subject 订阅时序，
+ * 集成环境下可能错过工作簿创建的同步发射，导致 focused$ 恒为 null——
+ * FOCUSING_SHEET 恒 false，ribbon 查找替换按钮永久置灰、快捷键不生效。
+ * 在 createWorkbook 之后调用本函数可确定性地恢复焦点状态。
+ */
+export function focusSheetUnit(univer: Univer, univerAPI: FUniver): void {
+  try {
+    const injector = univer.__getInjector() as unknown as { get: <T>(token: unknown) => T };
+    const instanceService = injector.get<IUniverInstanceService>(IUniverInstanceService);
+    const workbook = univerAPI.getActiveWorkbook();
+    if (workbook) instanceService.focusUnit(workbook.getUnitId());
+  } catch (e) {
+    console.warn('[excel-lite] focus sheet unit failed:', e);
   }
 }
 
@@ -283,6 +304,10 @@ function registerDesktopPlugins(univer: Univer, container: string | HTMLElement,
   });
   univer.registerPlugin(UniverSheetsFormulaUIPlugin);
   univer.registerPlugin(UniverFindReplacePlugin);
+  // sheet 搜索实现（provider）。缺失时 UniverFindReplacePlugin.start() 因
+  // _providers 为空而静默失败：命令执行但对话框永不弹出（0.25.x 双包结构，
+  // 上游 1.x 的 UniverSheetsFindReplacePlugin 同源）
+  univer.registerPlugin(UniverSheetsFindReplacePlugin);
   univer.registerPlugin(UniverSheetsFilterPlugin);
   univer.registerPlugin(UniverSheetsFilterUIPlugin);
   univer.registerPlugin(UniverSheetsSortPlugin);
